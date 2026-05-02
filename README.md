@@ -21,8 +21,9 @@ bunx mkol5222/mcpman --port 8080
 - Auto-detects Claude Desktop config file (macOS, Windows, Linux)
 - Lists all MCP servers with status (active/disabled/error)
 - Shows command, arguments, and environment variables
+- **View/edit raw config** — inline JSON viewer with editor mode (Ctrl+S to save)
 - **Enable/disable servers** by removing/restoring them from the config
-- **Restart Claude Desktop** on macOS and Windows
+- **Restart Claude Desktop** on macOS (osascript) and Windows (VBScript via cscript)
 - Modal detail view for each server with toggle control
 - Extensible architecture for future add/remove functionality
 
@@ -74,7 +75,12 @@ public/
 ### Configuration
 
 - `GET /api/config` - Returns parsed MCP server configuration + detected OS
+- `GET /api/config/raw` - Returns raw config file content
 - `GET /api/config?path=/custom/path` - Load config from custom path
+- `PUT /api/config/raw` - Save raw config content
+  ```json
+  { "content": "{ \"mcpServers\": { ... } }" }
+  ```
 - `POST /api/config/save` - Save full config object
 
 ### Server Management
@@ -91,10 +97,14 @@ public/
 
 ## Managing Servers
 
+### Config Viewer
+
+Click the **Config** button in the header to view the full `claude_desktop_config.json` inline. Click **Edit** to switch to an editable textarea. Save with the **Save** button or `Ctrl+S`. Tab inserts spaces.
+
 ### Enable/Disable
 
 Click the **Enable** or **Disable** button on any server card, or open the detail modal and use the toggle switch. Disabling removes the server from the Claude config and stores its settings for later. Enabling restores it.
 
 ### Restarting Claude
 
-Click **Restart Claude** in the header. You'll be prompted to confirm, with a summary of active vs disabled servers. On macOS, this uses `osascript` to quit and reopen Claude. On Windows, it uses `taskkill` and restarts the executable.
+Click **Restart Claude** in the header. You'll be prompted to confirm, with a summary of active vs disabled servers. On macOS, this uses `osascript` to quit and reopen Claude. On Windows, it uses a VBScript helper (via cscript) to reliably kill and relaunch Claude.exe.

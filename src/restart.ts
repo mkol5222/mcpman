@@ -1,5 +1,7 @@
 import { execSync } from 'node:child_process';
-import { platform } from 'node:os';
+import { writeFileSync, unlinkSync } from 'node:fs';
+import { platform, tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 export interface RestartResult {
   success: boolean;
@@ -9,12 +11,6 @@ export interface RestartResult {
 
 const MAC_APP_PATH = '/Applications/Claude.app';
 const MAC_APP_NAME = 'Claude';
-
-const WIN_PROCESS_NAMES = ['Claude.exe', 'Claude'];
-const WIN_PATHS = [
-  '%LOCALAPPDATA%\\Claude\\Claude.exe',
-  '%PROGRAMFILES%\\Claude\\Claude.exe',
-];
 
 export function getOS(): string {
   return platform();
@@ -73,30 +69,32 @@ function restartMac(): RestartResult {
 }
 
 function restartWindows(): RestartResult {
-  for (const proc of WIN_PROCESS_NAMES) {
-    try {
-      execSync(`taskkill /IM "${proc}" /F 2>nul`, {
-        encoding: 'utf-8',
-        shell: 'cmd.exe',
-        timeout: 10000,
-      });
-    } catch {
-    }
+  const scriptPath = join(tmpdir(), 'mcpman_restart_claude.vbs');
+
+  const vbsScript = [
+    'Set WshShell = CreateObject("WScript.Shell")',
+    'On Error Resume Next',
+    'WshShell.Run "taskkill /IM Claude.exe /F", 0, True',
+    'WScript.Sleep 2000',
+    'WshShell.Run """%LOCALAPPDATA%\\Claude\\Claude.exe""", 1, False',
+    'WshShell.Run """%PROGRAMFILES%\\Claude\\Claude.exe""", 1, False',
+  ].join('\n');
+
+  try {
+    writeFileSync(scriptPath, vbsScript, 'utf-8');
+    execSync(`cscript //nologo "${scriptPath}"`, {
+      timeout: 15000,
+      stdio: 'ignore',
+    });
+  } catch {
   }
 
   setTimeout(() => {
-    for (const appPath of WIN_PATHS) {
-      try {
-        execSync(`start "" "${appPath}"`, {
-          encoding: 'utf-8',
-          shell: 'cmd.exe',
-          timeout: 10000,
-        });
-        break;
-      } catch {
-      }
+    try {
+      unlinkSync(scriptPath);
+    } catch {
     }
-  }, 2000);
+  }, 5000);
 
   return {
     success: true,

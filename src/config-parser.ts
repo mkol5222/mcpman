@@ -287,3 +287,26 @@ export function enableServer(serverName: string, configPath?: string): SaveResul
     };
   }
 }
+
+export function loadRawConfigFile(filePath: string): { success: boolean; content?: string; path?: string; error?: string } {
+  if (!existsSync(filePath)) {
+    return {
+      success: false,
+      error: `File not found: ${filePath}`,
+    };
+  }
+
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    return {
+      success: true,
+      content,
+      path: filePath,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: `Failed to read file: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}

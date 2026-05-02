@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { serve } from 'bun';
-import { loadConfig, saveConfig, enableServer, disableServer } from './config-parser.ts';
+import { loadConfig, saveConfig, enableServer, disableServer, findConfigPath, getConfigPath, loadRawConfigFile } from './config-parser.ts';
 import { restartClaude, getOS } from './restart.ts';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
@@ -96,6 +96,32 @@ async function main() {
       if (path === '/api/config') {
         const result = loadConfig(configPath);
         return json({ ...result, os: getOS() });
+      }
+
+      if (path === '/api/config/raw' && req.method === 'GET') {
+        const filePath = configPath || findConfigPath() || getConfigPath();
+        const result = loadRawConfigFile(filePath);
+        return json(result);
+      }
+
+      if (path === '/api/config/raw' && req.method === 'PUT') {
+        const filePath = configPath || findConfigPath() || getConfigPath();
+        try {
+          const body = await req.json();
+          const content = body.content;
+          if (typeof content !== 'string') {
+            return error('Invalid content: expected a string');
+          }
+          const fs = await import('fs');
+          JSON.parse(content);
+          fs.writeFileSync(filePath, content, 'utf-8');
+          return json({ success: true, message: 'Configuration saved successfully', path: filePath });
+        } catch (err) {
+          if (err instanceof SyntaxError) {
+            return error('Invalid JSON: ' + err.message);
+          }
+          return error(`Failed to save: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
       }
 
       if (path === '/api/config/save' && req.method === 'POST') {

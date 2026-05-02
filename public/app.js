@@ -7,6 +7,15 @@ const toastTextEl = document.getElementById('toastText');
 const configInfoEl = document.getElementById('configInfo');
 const configPathEl = document.getElementById('configPath');
 const serverCountEl = document.getElementById('serverCount');
+const configEditor = document.getElementById('configEditor');
+const configViewer = document.getElementById('configViewer');
+const configContent = document.getElementById('configContent');
+const configTextarea = document.getElementById('configTextarea');
+const viewConfigBtn = document.getElementById('viewConfigBtn');
+const editConfigBtn = document.getElementById('editConfigBtn');
+const saveConfigBtn = document.getElementById('saveConfigBtn');
+const cancelConfigBtn = document.getElementById('cancelConfigBtn');
+const closeConfigBtn = document.getElementById('closeConfigBtn');
 const serversListEl = document.getElementById('serversList');
 const noServersEl = document.getElementById('noServers');
 const refreshBtn = document.getElementById('refreshBtn');
@@ -20,6 +29,8 @@ const modalClose = document.getElementById('modalClose');
 let currentOS = 'unknown';
 let currentConfig = null;
 let currentServers = [];
+let configEditorOpen = false;
+let configEditMode = false;
 
 async function loadConfig() {
   showLoading();
@@ -28,6 +39,7 @@ async function loadConfig() {
   hideConfigInfo();
   hideServers();
   hideNoServers();
+  hideConfigEditor();
 
   try {
     const response = await fetch('/api/config');
@@ -56,6 +68,86 @@ async function loadConfig() {
     hideLoading();
     showError(`Network error: ${err.message}`);
   }
+}
+
+async function loadRawConfig() {
+  try {
+    const response = await fetch('/api/config/raw');
+    const result = await response.json();
+
+    if (result.success) {
+      const formatted = JSON.stringify(JSON.parse(result.content), null, 2);
+      configContent.textContent = formatted;
+      configTextarea.value = formatted;
+    } else {
+      configContent.textContent = result.error || 'Failed to load config file';
+      configTextarea.value = '';
+    }
+  } catch (err) {
+    configContent.textContent = `Failed to load: ${err.message}`;
+    configTextarea.value = '';
+  }
+}
+
+async function saveRawConfig() {
+  try {
+    const content = configTextarea.value;
+    JSON.parse(content);
+
+    const response = await fetch('/api/config/raw', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast('Configuration saved successfully', 'success');
+      exitEditMode();
+      await loadConfig();
+    } else {
+      showToast(result.message, 'error');
+    }
+  } catch (err) {
+    if (err instanceof SyntaxError) {
+      showToast('Invalid JSON: ' + err.message, 'error');
+    } else {
+      showToast(`Failed to save: ${err.message}`, 'error');
+    }
+  }
+}
+
+function showConfigEditor() {
+  configEditorOpen = true;
+  configEditor.classList.remove('hidden');
+  loadRawConfig();
+}
+
+function hideConfigEditor() {
+  configEditorOpen = false;
+  configEditor.classList.add('hidden');
+  exitEditMode();
+}
+
+function enterEditMode() {
+  configEditMode = true;
+  configViewer.classList.add('hidden');
+  configTextarea.classList.remove('hidden');
+  editConfigBtn.classList.add('hidden');
+  saveConfigBtn.classList.remove('hidden');
+  cancelConfigBtn.classList.remove('hidden');
+  configTextarea.value = configContent.textContent;
+  configTextarea.focus();
+}
+
+function exitEditMode() {
+  configEditMode = false;
+  configViewer.classList.remove('hidden');
+  configTextarea.classList.add('hidden');
+  editConfigBtn.classList.remove('hidden');
+  saveConfigBtn.classList.add('hidden');
+  cancelConfigBtn.classList.add('hidden');
 }
 
 async function toggleServer(serverName, enable) {
@@ -332,12 +424,45 @@ function maskValue(value) {
   return value;
 }
 
+configTextarea.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = configTextarea.selectionStart;
+    const end = configTextarea.selectionEnd;
+    configTextarea.value = configTextarea.value.substring(0, start) + '  ' + configTextarea.value.substring(end);
+    configTextarea.selectionStart = configTextarea.selectionEnd = start + 2;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    saveRawConfig();
+  }
+});
+
 refreshBtn.addEventListener('click', loadConfig);
 restartBtn.addEventListener('click', restartClaude);
+viewConfigBtn.addEventListener('click', () => {
+  if (configEditorOpen) {
+    hideConfigEditor();
+  } else {
+    showConfigEditor();
+  }
+});
+editConfigBtn.addEventListener('click', enterEditMode);
+saveConfigBtn.addEventListener('click', saveRawConfig);
+cancelConfigBtn.addEventListener('click', exitEditMode);
+closeConfigBtn.addEventListener('click', hideConfigEditor);
 modalClose.addEventListener('click', hideModal);
 serverModal.querySelector('.modal-backdrop').addEventListener('click', hideModal);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') hideModal();
+  if (e.key === 'Escape') {
+    if (configEditMode) {
+      exitEditMode();
+    } else if (configEditorOpen) {
+      hideConfigEditor();
+    } else {
+      hideModal();
+    }
+  }
 });
 
 loadConfig();
