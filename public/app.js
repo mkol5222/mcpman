@@ -483,6 +483,22 @@ configTextarea.addEventListener('keydown', (e) => {
   }
 });
 
+let validationTimeout = null;
+configTextarea.addEventListener('input', () => {
+  clearTimeout(validationTimeout);
+  validationTimeout = setTimeout(() => {
+    try {
+      JSON.parse(configTextarea.value);
+      configTextarea.style.borderColor = '';
+      hideToast();
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        configTextarea.style.borderColor = 'var(--error)';
+      }
+    }
+  }, 500);
+});
+
 refreshBtn.addEventListener('click', loadConfig);
 restartBtn.addEventListener('click', restartClaude);
 viewConfigBtn.addEventListener('click', () => {

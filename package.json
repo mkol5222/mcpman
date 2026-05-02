@@ -13,6 +13,7 @@
     "public",
     "README.md"
   ],
+  "schema": "./public/claude-desktop-config-schema.json",
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
