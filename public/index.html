@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Desktop MCP Server Inspector</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-content">
+        <div class="logo">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+          </svg>
+          <h1>MCP Server Inspector</h1>
+        </div>
+        <div class="header-actions">
+          <button id="restartBtn" class="btn btn-warning" title="Restart Claude Desktop">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Restart Claude
+          </button>
+          <button id="refreshBtn" class="btn btn-secondary" title="Refresh">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 2v6h-6"/>
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+              <path d="M3 22v-6h6"/>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+            </svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p>Loading configuration...</p>
+      </div>
+
+      <div id="error" class="error-message hidden">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <p id="errorText"></p>
+      </div>
+
+      <div id="toast" class="toast hidden">
+        <svg id="toastIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        <span id="toastText"></span>
+      </div>
+
+      <div id="configInfo" class="config-info hidden">
+        <div class="config-path">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span id="configPath"></span>
+        </div>
+        <div class="server-count">
+          <span id="serverCount"></span> servers configured
+        </div>
+      </div>
+
+      <div id="serversList" class="servers-list">
+      </div>
+
+      <div id="noServers" class="no-servers hidden">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        <h2>No MCP Servers Found</h2>
+        <p>No MCP servers are configured in your Claude Desktop configuration.</p>
+      </div>
+    </main>
+
+    <div id="serverModal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modalTitle">Server Details</h2>
+          <button class="modal-close" id="modalClose">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+        </div>
+        <div class="modal-footer" id="modalFooter">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
