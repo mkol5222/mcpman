@@ -109,4 +109,4 @@ const server = serve({
   },
 });
 
-console.log(`MCP Server Inspector running at http://localhost:${PORT}`);
+console.log(`Claude Code MCP Server Manager running at http://localhost:${PORT}`);

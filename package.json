@@ -1,7 +1,7 @@
 {
   "name": "mcpman",
   "version": "1.1.0",
-  "description": "Claude Desktop MCP Server Inspector - view, enable/disable, and manage MCP servers",
+  "description": "Claude Code MCP Server Manager - view, enable/disable, and manage MCP servers",
   "module": "src/server.ts",
   "type": "module",
   "bin": {

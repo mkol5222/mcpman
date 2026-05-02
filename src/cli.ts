@@ -158,7 +158,7 @@ async function main() {
   const url = `http://localhost:${port}`;
 
   console.log('');
-  console.log('  MCP Server Inspector');
+  console.log('  Claude Code MCP Server Manager');
   console.log('');
   console.log(`  Local:   ${url}`);
   console.log('');

@@ -25,11 +25,17 @@ export interface ServerOptions {
 export function serve(options: ServerOptions): Server {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || '/', `http://localhost:${options.port}`);
-    const request = new Request(url.toString(), {
+    const requestInit: RequestInit = {
       method: req.method,
       headers: req.headers as HeadersInit,
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? req : undefined,
-    });
+    };
+
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      requestInit.body = req;
+      requestInit.duplex = 'half';
+    }
+
+    const request = new Request(url.toString(), requestInit);
 
     try {
       const response = await options.fetch(request);
