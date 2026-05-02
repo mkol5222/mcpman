@@ -26,11 +26,51 @@ const modalBody = document.getElementById('modalBody');
 const modalFooter = document.getElementById('modalFooter');
 const modalClose = document.getElementById('modalClose');
 
+let validationWarningEl = null;
+
 let currentOS = 'unknown';
 let currentConfig = null;
 let currentServers = [];
 let configEditorOpen = false;
 let configEditMode = false;
+
+function showValidationWarning(validation) {
+  if (!validation || validation.valid) {
+    hideValidationWarning();
+    return;
+  }
+
+  if (!validationWarningEl) {
+    validationWarningEl = document.createElement('div');
+    validationWarningEl.className = 'validation-warning';
+    configInfoEl.parentNode.insertBefore(validationWarningEl, configInfoEl.nextSibling);
+  }
+
+  const errorCount = validation.errors.length;
+  const errorList = validation.errors.map(err =>
+    `<li><strong>${escapeHtml(err.path || '(root)')}:</strong> ${escapeHtml(err.message)}</li>`
+  ).join('');
+
+  validationWarningEl.innerHTML = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+    <div>
+      <strong>Configuration Warning</strong>
+      <p>${errorCount} validation error${errorCount > 1 ? 's' : ''} found:</p>
+      <ul>${errorList}</ul>
+    </div>
+  `;
+  validationWarningEl.classList.remove('hidden');
+}
+
+function hideValidationWarning() {
+  if (validationWarningEl) {
+    validationWarningEl.classList.add('hidden');
+  }
+}
 
 async function loadConfig() {
   showLoading();
@@ -57,6 +97,7 @@ async function loadConfig() {
     currentServers = result.servers;
 
     showConfigInfo(result.path, result.servers.length);
+    showValidationWarning(result.validation);
 
     if (result.servers.length === 0) {
       showNoServers();
@@ -79,6 +120,10 @@ async function loadRawConfig() {
       const formatted = JSON.stringify(JSON.parse(result.content), null, 2);
       configContent.textContent = formatted;
       configTextarea.value = formatted;
+
+      if (result.validation && !result.validation.valid) {
+        showToast(`${result.validation.errors.length} validation error(s) found`, 'error');
+      }
     } else {
       configContent.textContent = result.error || 'Failed to load config file';
       configTextarea.value = '';

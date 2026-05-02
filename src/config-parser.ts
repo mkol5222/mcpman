@@ -2,6 +2,75 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 
 import { homedir, platform } from 'node:os';
 import { join, dirname, basename } from 'node:path';
 
+export interface ValidationError {
+  path: string;
+  message: string;
+}
+
+export function validateConfig(config: unknown): { valid: boolean; errors: ValidationError[] } {
+  const errors: ValidationError[] = [];
+
+  if (!config || typeof config !== 'object') {
+    errors.push({ path: '', message: 'Configuration must be an object' });
+    return { valid: false, errors };
+  }
+
+  const cfg = config as Record<string, unknown>;
+
+  if (!('mcpServers' in cfg)) {
+    errors.push({ path: '', message: 'Missing required field: mcpServers' });
+    return { valid: false, errors };
+  }
+
+  if (!cfg.mcpServers || typeof cfg.mcpServers !== 'object') {
+    errors.push({ path: 'mcpServers', message: 'mcpServers must be an object' });
+    return { valid: false, errors };
+  }
+
+  const servers = cfg.mcpServers as Record<string, unknown>;
+  const serverNames = Object.keys(servers);
+
+  if (serverNames.length === 0) {
+    errors.push({ path: 'mcpServers', message: 'No servers defined in mcpServers' });
+  }
+
+  for (const [name, serverConfig] of Object.entries(servers)) {
+    const serverPath = `mcpServers.${name}`;
+
+    if (!serverConfig || typeof serverConfig !== 'object') {
+      errors.push({ path: serverPath, message: 'Server configuration must be an object' });
+      continue;
+    }
+
+    const server = serverConfig as Record<string, unknown>;
+
+    if (!('command' in server)) {
+      errors.push({ path: serverPath, message: 'Missing required field: command' });
+    } else if (typeof server.command !== 'string') {
+      errors.push({ path: `${serverPath}.command`, message: 'command must be a string' });
+    }
+
+    if ('args' in server) {
+      if (!Array.isArray(server.args)) {
+        errors.push({ path: `${serverPath}.args`, message: 'args must be an array' });
+      } else {
+        const allStrings = (server.args as unknown[]).every(arg => typeof arg === 'string');
+        if (!allStrings) {
+          errors.push({ path: `${serverPath}.args`, message: 'All args must be strings' });
+        }
+      }
+    }
+
+    if ('env' in server) {
+      if (!server.env || typeof server.env !== 'object') {
+        errors.push({ path: `${serverPath}.env`, message: 'env must be an object' });
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
 export interface McpServerConfig {
   command: string;
   args: string[];
@@ -25,6 +94,10 @@ export interface ConfigResult {
   config?: ClaudeDesktopConfig;
   servers: ServerInfo[];
   error?: string;
+  validation?: {
+    valid: boolean;
+    errors: ValidationError[];
+  };
 }
 
 export interface SaveResult {
@@ -107,6 +180,7 @@ export function loadConfig(configPath?: string): ConfigResult {
   try {
     const raw = readFileSync(path, 'utf-8');
     const config: ClaudeDesktopConfig = JSON.parse(raw);
+    const validation = validateConfig(config);
 
     if (!config.mcpServers || typeof config.mcpServers !== 'object') {
       return {
@@ -115,6 +189,7 @@ export function loadConfig(configPath?: string): ConfigResult {
         config,
         servers: [],
         error: 'No "mcpServers" section found in configuration',
+        validation,
       };
     }
 
@@ -157,6 +232,7 @@ export function loadConfig(configPath?: string): ConfigResult {
       path,
       config,
       servers: allServers,
+      validation,
     };
   } catch (err) {
     return {
@@ -288,7 +364,7 @@ export function enableServer(serverName: string, configPath?: string): SaveResul
   }
 }
 
-export function loadRawConfigFile(filePath: string): { success: boolean; content?: string; path?: string; error?: string } {
+export function loadRawConfigFile(filePath: string): { success: boolean; content?: string; path?: string; error?: string; validation?: { valid: boolean; errors: ValidationError[] } } {
   if (!existsSync(filePath)) {
     return {
       success: false,
@@ -298,10 +374,23 @@ export function loadRawConfigFile(filePath: string): { success: boolean; content
 
   try {
     const content = readFileSync(filePath, 'utf-8');
+    let validation;
+    try {
+      const config = JSON.parse(content);
+      validation = validateConfig(config);
+    } catch {
+      return {
+        success: true,
+        content,
+        path: filePath,
+        validation: { valid: false, errors: [{ path: '', message: 'Invalid JSON: unable to parse file' }] },
+      };
+    }
     return {
       success: true,
       content,
       path: filePath,
+      validation,
     };
   } catch (err) {
     return {

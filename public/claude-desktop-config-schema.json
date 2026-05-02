@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Claude Desktop MCP Configuration",
+  "description": "Configuration file for Claude Desktop MCP servers",
+  "type": "object",
+  "properties": {
+    "mcpServers": {
+      "type": "object",
+      "description": "MCP servers configuration",
+      "propertyNames": {
+        "pattern": "^[a-zA-Z0-9_-]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "description": "MCP server configuration",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Command to run the MCP server"
+          },
+          "args": {
+            "type": "array",
+            "description": "Arguments to pass to the command",
+            "items": {
+              "type": "string"
+            }
+          },
+          "env": {
+            "type": "object",
+            "description": "Environment variables to set for the server",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["command"]
+      }
+    }
+  },
+  "required": ["mcpServers"]
+}
