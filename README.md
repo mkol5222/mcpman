@@ -1,6 +1,20 @@
-# MCP Server Inspector
+# MCP Server Inspector (mcpman)
 
 A Bun-based web app that inspects and manages your Claude Desktop MCP server configuration. It automatically finds and parses `claude_desktop_config.json`, displaying all configured MCP servers with their details.
+
+## Quick Start
+
+```bash
+bunx mkol5222/mcpman
+```
+
+That's it — the server starts and your browser opens automatically.
+
+### Custom Port
+
+```bash
+bunx mkol5222/mcpman --port 8080
+```
 
 ## Features
 
@@ -12,9 +26,11 @@ A Bun-based web app that inspects and manages your Claude Desktop MCP server con
 - Modal detail view for each server with toggle control
 - Extensible architecture for future add/remove functionality
 
-## Getting Started
+## Development
 
 ```bash
+git clone https://github.com/mkol5222/mcpman.git
+cd mcpman
 bun install
 bun run dev    # with hot reload
 # or
@@ -43,13 +59,14 @@ This means the Claude config always stays clean and valid — disabled servers s
 
 ```
 src/
-  config-parser.ts   # Config detection, parsing, saving, enable/disable
-  restart.ts         # Claude Desktop restart utility (macOS/Windows)
-  server.ts          # Bun HTTP server + API endpoints
+  cli.ts           # CLI entry point (bunx) — starts server + opens browser
+  config-parser.ts # Config detection, parsing, saving, enable/disable
+  restart.ts       # Claude Desktop restart utility (macOS/Windows)
+  server.ts        # Standalone HTTP server
 public/
-  index.html         # Main page
-  app.css            # Styles
-  app.js             # Frontend logic
+  index.html       # Main page
+  app.css          # Styles
+  app.js           # Frontend logic
 ```
 
 ## API
@@ -59,9 +76,6 @@ public/
 - `GET /api/config` - Returns parsed MCP server configuration + detected OS
 - `GET /api/config?path=/custom/path` - Load config from custom path
 - `POST /api/config/save` - Save full config object
-  ```json
-  { "config": { "mcpServers": { ... } } }
-  ```
 
 ### Server Management
 
