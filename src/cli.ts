@@ -1,11 +1,11 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
-import { serve } from 'bun';
+import { serve } from './http-server.ts';
+import { serveStaticFile as serveStaticFileUtil, getDirname } from './http-server.ts';
 import { loadConfig, saveConfig, enableServer, disableServer, findConfigPath, getConfigPath, loadRawConfigFile } from './config-parser.ts';
 import { restartClaude, getOS } from './restart.ts';
-import { join, dirname } from 'path';
-import { existsSync } from 'fs';
-import { platform, homedir } from 'os';
+import { join } from 'path';
+import { platform } from 'os';
 import { execSync } from 'child_process';
 
 const DEFAULT_PORT = 3000;
@@ -18,6 +18,8 @@ function parseArgs(): { port: number } {
     if (args[i] === '--port' && args[i + 1]) {
       port = parseInt(args[++i]);
     } else if (args[i] === '--help' || args[i] === '-h') {
+      const isBun = typeof process.versions.bun !== 'undefined';
+      const cmd = isBun ? 'bunx' : 'npx';
       console.log('Usage: mcpman [options]');
       console.log('');
       console.log('Options:');
@@ -25,8 +27,8 @@ function parseArgs(): { port: number } {
       console.log('  --help, -h       Show this help message');
       console.log('');
       console.log('Examples:');
-      console.log('  bunx mkol5222/mcpman');
-      console.log('  bunx mkol5222/mcpman --port 8080');
+      console.log(`  ${cmd} mkol5222/mcpman`);
+      console.log(`  ${cmd} mkol5222/mcpman --port 8080`);
       process.exit(0);
     }
   }
@@ -51,32 +53,7 @@ function openBrowser(url: string): void {
 
 async function main() {
   const { port } = parseArgs();
-  const PUBLIC_DIR = join(import.meta.dir, '..', 'public');
-
-  function serveStaticFile(filePath: string): Response | null {
-    const fullPath = join(PUBLIC_DIR, filePath);
-
-    if (!existsSync(fullPath)) {
-      return null;
-    }
-
-    const ext = fullPath.split('.').pop()?.toLowerCase();
-    const mimeTypes: Record<string, string> = {
-      html: 'text/html',
-      css: 'text/css',
-      js: 'application/javascript',
-      json: 'application/json',
-      svg: 'image/svg+xml',
-      png: 'image/png',
-      ico: 'image/x-icon',
-    };
-
-    const contentType = mimeTypes[ext || ''] || 'application/octet-stream';
-
-    return new Response(Bun.file(fullPath), {
-      headers: { 'Content-Type': contentType },
-    });
-  }
+  const PUBLIC_DIR = join(getDirname(import.meta.url), '..', 'public');
 
   function json(data: unknown, status = 200): Response {
     return Response.json(data, { status });
@@ -166,10 +143,10 @@ async function main() {
       }
 
       if (path === '/' || path === '/index.html') {
-        return serveStaticFile('index.html') || new Response('Not found', { status: 404 });
+        return serveStaticFileUtil('index.html', PUBLIC_DIR) || new Response('Not found', { status: 404 });
       }
 
-      const staticFile = serveStaticFile(path.replace(/^\//, ''));
+      const staticFile = serveStaticFileUtil(path.replace(/^\//, ''), PUBLIC_DIR);
       if (staticFile) {
         return staticFile;
       }

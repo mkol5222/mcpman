@@ -1,13 +1,14 @@
 {
   "name": "mcpman",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Claude Desktop MCP Server Inspector - view, enable/disable, and manage MCP servers",
   "module": "src/server.ts",
   "type": "module",
   "bin": {
-    "mcpman": "src/cli.ts"
+    "mcpman": "bin/cli.js"
   },
   "files": [
+    "bin",
     "src",
     "public",
     "README.md"
@@ -29,6 +30,9 @@
     "desktop"
   ],
   "license": "MIT",
+  "dependencies": {
+    "tsx": "^4.19.3"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },

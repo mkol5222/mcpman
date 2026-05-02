@@ -1,36 +1,13 @@
-import { serve } from 'bun';
+import { serve, getDirname } from './http-server.ts';
+import { serveStaticFile } from './http-server.ts';
 import { loadConfig, saveConfig, enableServer, disableServer, getConfigPath, findConfigPath, loadRawConfigFile } from './config-parser.ts';
 import { restartClaude, getOS } from './restart.ts';
 import { join } from 'path';
-import { existsSync } from 'fs';
 
 const PORT = parseInt(process.env.PORT || '3000');
-const PUBLIC_DIR = join(import.meta.dir, '..', 'public');
+const PUBLIC_DIR = join(getDirname(import.meta.url), '..', 'public');
 
-function serveStaticFile(filePath: string): Response | null {
-  const fullPath = join(PUBLIC_DIR, filePath);
-
-  if (!existsSync(fullPath)) {
-    return null;
-  }
-
-  const ext = fullPath.split('.').pop()?.toLowerCase();
-  const mimeTypes: Record<string, string> = {
-    html: 'text/html',
-    css: 'text/css',
-    js: 'application/javascript',
-    json: 'application/json',
-    svg: 'image/svg+xml',
-    png: 'image/png',
-    ico: 'image/x-icon',
-  };
-
-  const contentType = mimeTypes[ext || ''] || 'application/octet-stream';
-
-  return new Response(Bun.file(fullPath), {
-    headers: { 'Content-Type': contentType },
-  });
-}
+// serveStaticFile is now imported from http-server.ts
 
 function json(data: unknown, status = 200): Response {
   return Response.json(data, { status });
@@ -120,10 +97,10 @@ const server = serve({
     }
 
     if (path === '/' || path === '/index.html') {
-      return serveStaticFile('index.html') || new Response('Not found', { status: 404 });
+      return serveStaticFile('index.html', PUBLIC_DIR) || new Response('Not found', { status: 404 });
     }
 
-    const staticFile = serveStaticFile(path.replace(/^\//, ''));
+    const staticFile = serveStaticFile(path.replace(/^\//, ''), PUBLIC_DIR);
     if (staticFile) {
       return staticFile;
     }
