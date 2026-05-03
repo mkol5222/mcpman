@@ -101,24 +101,6 @@ const server = serve({
       }
     }
 
-    if (path.startsWith('/api/config/servers/') && req.method === 'POST') {
-      const serverName = decodeURIComponent(path.split('/').pop() || '');
-      const body = await req.json();
-      const action = body.action;
-
-      if (action === 'enable') {
-        const result = enableServer(serverName, configPath);
-        return json(result);
-      }
-
-      if (action === 'disable') {
-        const result = disableServer(serverName, configPath);
-        return json(result);
-      }
-
-      return error(`Unknown action: ${action}`);
-    }
-
     if (path.startsWith('/api/config/servers/') && req.method === 'PUT') {
       const serverName = decodeURIComponent(path.split('/').pop() || '');
       const body = await req.json();
@@ -191,6 +173,24 @@ const server = serve({
       }
 
       return error(`Server "${serverName}" not found`);
+    }
+
+    if (path.startsWith('/api/config/servers/') && req.method === 'POST') {
+      const serverName = decodeURIComponent(path.split('/').pop() || '');
+      const body = await req.json();
+      const action = body.action;
+
+      if (action === 'enable') {
+        const result = enableServer(serverName, configPath);
+        return json(result);
+      }
+
+      if (action === 'disable') {
+        const result = disableServer(serverName, configPath);
+        return json(result);
+      }
+
+      return error(`Unknown action: ${action}`);
     }
 
     if (path === '/api/restart' && req.method === 'POST') {
