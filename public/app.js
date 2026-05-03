@@ -45,17 +45,33 @@ const LOCAL_STORAGE_KEY = 'mcpman_global_env';
 const MCP_CATALOG = [
   {
     name: 'management',
-    command: 'infinity-mcp-protect',
-    args: ['npx', '-y', '@chkp/quantum-management-mcp@latest'],
-    description: 'Quantum management MCP server',
-    env: ['USERNAME', 'PASSWORD', 'MANAGEMENT_PORT', 'MANAGEMENT_HOST']
+    package: '@chkp/quantum-management-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/quantum-management-mcp'],
+    description: 'Query and visualize installed policies, rulebases, and network topology. Retrieve and analyze access, NAT and VPN rules.',
+    features: ['Query installed policies and rulebases', 'Network topology visualization', 'Access, NAT and VPN rules analysis', 'Objects inspection (hosts, networks, services)'],
+    useCases: ['Regulatory compliance checks', 'Risky rule discovery', 'Path analysis for access', 'Rulebase optimization with AI'],
+    env: ['MANAGEMENT_HOST', 'MANAGEMENT_PORT', 'API_KEY', 'USERNAME', 'PASSWORD']
   },
   {
     name: 'management-logs',
-    command: 'infinity-mcp-protect',
-    args: ['npx', '-y', '@chkp/management-logs-mcp@latest'],
-    description: 'Management logs MCP server',
-    env: ['USERNAME', 'PASSWORD', 'MANAGEMENT_PORT', 'MANAGEMENT_HOST']
+    package: '@chkp/management-logs-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/management-logs-mcp'],
+    description: 'Query and visualize connection logs. View audit and monitoring logs for security analysis and compliance.',
+    features: ['Connection logs querying', 'Audit log analysis', 'Monitoring logs', 'Best used with other Check Point MCPs'],
+    useCases: ['Dropped connection analysis', 'Network probing investigation', 'Policy audit research'],
+    env: ['MANAGEMENT_HOST', 'MANAGEMENT_PORT', 'API_KEY', 'USERNAME', 'PASSWORD']
+  },
+  {
+    name: 'https-inspection',
+    package: '@chkp/https-inspection-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/https-inspection-mcp'],
+    description: 'Query and analyze HTTPS inspection rules, layers, and gateway configurations.',
+    features: ['HTTPS inspection rule management', 'Layer and section analysis', 'Gateway integration', 'SSL/TLS policy compliance'],
+    useCases: ['HTTPS inspection rule analysis', 'SSL/TLS policy compliance', 'Traffic decryption coverage', 'Performance impact analysis'],
+    env: ['MANAGEMENT_HOST', 'MANAGEMENT_PORT', 'API_KEY', 'USERNAME', 'PASSWORD']
   }
 ];
 
@@ -831,10 +847,17 @@ function renderCatalog(catalog) {
   body.innerHTML = '<div class="catalog-list">' + catalog.map(server => `
     <div class="catalog-item">
       <div class="catalog-item-info">
-        <div class="catalog-item-name">${escapeHtml(server.name)}</div>
-        <div class="catalog-item-command">${escapeHtml(server.command)}</div>
-        <div class="catalog-item-args">${escapeHtml(server.args.join(' '))}</div>
-        <div class="catalog-item-env">Env: ${server.env.join(', ')}</div>
+        <div class="catalog-item-header">
+          <div class="catalog-item-name">${escapeHtml(server.name)}</div>
+          <div class="catalog-item-package">${escapeHtml(server.package)}</div>
+        </div>
+        <div class="catalog-item-description">${escapeHtml(server.description)}</div>
+        <div class="catalog-item-features">
+          ${server.features.map(f => '<span class="catalog-feature">' + escapeHtml(f) + '</span>').join('')}
+        </div>
+        <div class="catalog-item-env">
+          <strong>Env:</strong> ${server.env.join(', ')}
+        </div>
       </div>
       <div class="catalog-item-action">
         <button class="btn btn-sm btn-success" data-add-catalog="${escapeHtml(server.name)}">

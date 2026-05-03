@@ -607,43 +607,61 @@ body {
   min-width: 0;
 }
 
+.catalog-item-header {
+  margin-bottom: 8px;
+}
+
 .catalog-item-name {
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  display: inline-block;
 }
 
-.catalog-item-command {
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  background: var(--bg-tertiary);
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.catalog-item-args {
+.catalog-item-package {
   font-family: 'SF Mono', 'Fira Code', monospace;
   font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-top: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--accent);
+  margin-left: 8px;
+  display: inline-block;
+}
+
+.catalog-item-description {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.catalog-item-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.catalog-feature {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  color: var(--text-secondary);
 }
 
 .catalog-item-env {
   font-size: 0.75rem;
   color: var(--text-muted);
-  margin-top: 6px;
+}
+
+.catalog-item-env strong {
+  color: var(--text-secondary);
 }
 
 .catalog-item-action {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .modal-header {
