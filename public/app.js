@@ -1335,15 +1335,25 @@ function getMcpPreview(event) {
 function renderMcpMessage(event, direction) {
   const preview = getMcpPreview(event);
   const arrow = direction === 'client' ? '→' : '←';
+  const dirLabel = direction === 'client' ? 'CLIENT' : 'SERVER';
   const errorCls = (event.error || event.result?.isError) ? ' is-error' : '';
   const jsonHtml = syntaxHighlightJson(event.rawJson);
+
+  // Summary tag line: direction · method or "result/error" · #id
+  const methodTag = event.method
+    ? `<span class="sh-tag mcp-method-${methodClass(event.method)}">${escapeHtml(event.method)}</span>`
+    : (direction === 'server' ? `<span class="sh-tag ${event.error ? 'sh-tag-error' : 'sh-tag-result'}">${event.error ? 'error' : 'result'}</span>` : '');
+  const idTag = event.id != null ? `<span class="sh-tag sh-tag-id">#${event.id}</span>` : '';
+
   return `
     <div class="mcp-message from-${direction}${errorCls}">
       <div class="mcp-msg-arrow">${arrow}</div>
       <div class="mcp-msg-body">
         ${preview ? `<div class="mcp-preview">${escapeHtml(preview)}</div>` : ''}
         <details class="mcp-json-expand">
-          <summary class="mcp-json-summary">JSON</summary>
+          <summary class="mcp-json-summary">
+            <span class="sh-tag sh-tag-dir-${direction}">${dirLabel}</span>${methodTag}${idTag}
+          </summary>
           <pre class="mcp-json-pre">${jsonHtml}</pre>
         </details>
       </div>
@@ -1424,19 +1434,37 @@ function escHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// JSON-RPC protocol-level keys that get semantic highlighting
+const RPC_KEYS = new Set(['jsonrpc', 'method', 'id', 'params', 'result', 'error', 'code', 'message', 'content', 'type', 'text', 'isError', 'name', 'arguments', 'tools']);
+
 function syntaxHighlightJson(json) {
   if (!json) return '';
   let str;
   try { str = JSON.stringify(JSON.parse(json), null, 2); } catch { str = json; }
-  // Match key strings (followed by :), value strings, booleans/null, numbers
+
   const TOKEN = /("(?:[^"\\]|\\.)*")(\s*:)|("(?:[^"\\]|\\.)*")|(true|false|null)|(-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g;
-  let out = '', last = 0, m;
+  let out = '', last = 0, prevWasMethod = false, m;
+
   while ((m = TOKEN.exec(str)) !== null) {
     out += escHtml(str.slice(last, m.index));
-    if (m[1])      out += `<span class="sh-key">${escHtml(m[1])}</span>${escHtml(m[2])}`;
-    else if (m[3]) out += `<span class="sh-string">${escHtml(m[3])}</span>`;
-    else if (m[4]) out += `<span class="${m[4] === 'null' ? 'sh-null' : 'sh-boolean'}">${m[4]}</span>`;
-    else if (m[5]) out += `<span class="sh-number">${m[5]}</span>`;
+    if (m[1]) {
+      const key = m[1].slice(1, -1);
+      const cls = key === 'method' ? 'sh-rpc-method-key'
+                : RPC_KEYS.has(key) ? 'sh-rpc-key'
+                : 'sh-key';
+      prevWasMethod = key === 'method';
+      out += `<span class="${cls}">${escHtml(m[1])}</span>${escHtml(m[2])}`;
+    } else if (m[3]) {
+      const cls = prevWasMethod ? 'sh-method-value' : 'sh-string';
+      prevWasMethod = false;
+      out += `<span class="${cls}">${escHtml(m[3])}</span>`;
+    } else if (m[4]) {
+      prevWasMethod = false;
+      out += `<span class="${m[4] === 'null' ? 'sh-null' : 'sh-boolean'}">${m[4]}</span>`;
+    } else if (m[5]) {
+      prevWasMethod = false;
+      out += `<span class="sh-number">${m[5]}</span>`;
+    }
     last = TOKEN.lastIndex;
   }
   return out + escHtml(str.slice(last));
