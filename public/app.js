@@ -44,6 +44,7 @@ const ENCRYPTION_KEY = 'mcpman-env-secret';
 const LOCAL_STORAGE_KEY = 'mcpman_global_env';
 
 const MCP_CATALOG = [
+  // ── Quantum Management ────────────────────────────────────────────────────
   {
     name: 'management',
     package: '@chkp/quantum-management-mcp',
@@ -73,7 +74,132 @@ const MCP_CATALOG = [
     features: ['HTTPS inspection rule management', 'Layer and section analysis', 'Gateway integration', 'SSL/TLS policy compliance'],
     useCases: ['HTTPS inspection rule analysis', 'SSL/TLS policy compliance', 'Traffic decryption coverage', 'Performance impact analysis'],
     env: ['MANAGEMENT_HOST', 'MANAGEMENT_PORT', 'API_KEY', 'USERNAME', 'PASSWORD']
-  }
+  },
+  {
+    name: 'policy-insights',
+    package: '@chkp/policy-insights-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/policy-insights-mcp'],
+    description: 'Query, analyze, and optimize security policies through a structured API interface designed for AI-powered systems.',
+    features: ['Policy analysis and optimization', 'Security posture assessment', 'Rule usage and shadowing detection', 'Infinity Cloud Policy Insights card'],
+    useCases: ['Policy cleanup and optimization', 'Security gap analysis', 'Compliance reporting', 'Unused rule detection'],
+    env: ['MANAGEMENT_HOST', 'MANAGEMENT_PORT', 'API_KEY', 'USERNAME', 'PASSWORD', 'S1C_URL']
+  },
+  {
+    name: 'threat-prevention',
+    package: '@chkp/threat-prevention-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/threat-prevention-mcp'],
+    description: 'Query and analyze threat protections, profiles, and indicators with IPS monitoring and IOC feed management.',
+    features: ['Threat protection querying', 'IPS rule and profile analysis', 'IOC feed management', 'Threat indicator lookup'],
+    useCases: ['IPS coverage analysis', 'Threat profile optimization', 'IOC investigation', 'Protection gap identification'],
+    env: ['MANAGEMENT_HOST', 'MANAGEMENT_PORT', 'API_KEY', 'USERNAME', 'PASSWORD', 'S1C_URL']
+  },
+  // ── Quantum Gateway ───────────────────────────────────────────────────────
+  {
+    name: 'gaia',
+    package: '@chkp/quantum-gaia-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/quantum-gaia-mcp'],
+    description: 'Expose Check Point Gaia OS network management data for AI systems to query network configurations, routing protocols, interfaces, and security policies.',
+    features: ['Network interface configuration', 'Routing protocol analysis', 'Gaia OS settings and status', 'Security policy queries'],
+    useCases: ['Network configuration audit', 'Routing troubleshooting', 'Interface health monitoring', 'Gaia OS change management'],
+    env: ['MANAGEMENT_HOST', 'MANAGEMENT_PORT', 'API_KEY', 'USERNAME', 'PASSWORD']
+  },
+  {
+    name: 'gw-cli',
+    package: '@chkp/quantum-gw-cli-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/quantum-gw-cli-mcp'],
+    description: 'Expose Check Point Quantum Gateway management data including hardware diagnostics, network configurations, HA monitoring, performance analytics, and real-time connection debugging.',
+    features: ['Hardware diagnostics', 'HA status monitoring', 'Performance analytics', 'Real-time connection debugging', 'Network configuration queries'],
+    useCases: ['Gateway health checks', 'HA failover investigation', 'Performance bottleneck analysis', 'Connection troubleshooting'],
+    env: ['MANAGEMENT_HOST', 'MANAGEMENT_PORT', 'API_KEY', 'USERNAME', 'PASSWORD', 'S1C_URL']
+  },
+  {
+    name: 'gw-cli-connection-analysis',
+    package: '@chkp/quantum-gw-connection-analysis-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/quantum-gw-connection-analysis-mcp'],
+    description: 'Simplify connection debugging on Check Point gateways with structured connection data and live analysis sessions for AI-assisted troubleshooting.',
+    features: ['Live connection analysis sessions', 'Structured connection state data', 'Gateway-level connection debugging', 'AI-guided troubleshooting flow'],
+    useCases: ['Dropped connection root cause analysis', 'Traffic flow debugging', 'NAT and inspection troubleshooting', 'Real-time connectivity investigation'],
+    env: ['MANAGEMENT_HOST', 'MANAGEMENT_PORT', 'API_KEY', 'USERNAME', 'PASSWORD', 'S1C_URL']
+  },
+  // ── Threat Intelligence ───────────────────────────────────────────────────
+  {
+    name: 'reputation-service',
+    package: '@chkp/reputation-service-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/reputation-service-mcp'],
+    description: 'Classify threat reputation for URLs, file hashes, and IP addresses using Check Point ThreatCloud intelligence.',
+    features: ['URL reputation lookup', 'File hash classification', 'IP address threat scoring', 'ThreatCloud intelligence'],
+    useCases: ['Phishing URL investigation', 'Malware hash verification', 'Suspicious IP analysis', 'Incident response enrichment'],
+    env: ['API_KEY']
+  },
+  {
+    name: 'threat-emulation',
+    package: '@chkp/threat-emulation-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/threat-emulation-mcp'],
+    description: 'Integrate with Check Point Threat Emulation and Anti-Virus cloud services to submit files for sandbox analysis and retrieve verdicts.',
+    features: ['File sandbox submission', 'Threat emulation verdicts', 'Anti-Virus cloud scanning', 'Detailed malware reports'],
+    useCases: ['Malware analysis', 'File safety verification', 'Incident response triage', 'Automated threat hunting'],
+    env: ['API_KEY']
+  },
+  // ── Harmony SASE ─────────────────────────────────────────────────────────
+  {
+    name: 'harmony-sase',
+    package: '@chkp/harmony-sase-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/harmony-sase-mcp'],
+    description: 'Expose Harmony SASE data in a structured format for AI systems to query networks, gateways, applications, and regional configurations.',
+    features: ['SASE network queries', 'Gateway configuration', 'Application access policies', 'Regional SASE topology'],
+    useCases: ['SASE policy audit', 'Remote access troubleshooting', 'Application access review', 'Network segmentation analysis'],
+    env: ['API_KEY', 'MANAGEMENT_HOST', 'ORIGIN']
+  },
+  // ── Quantum Spark ─────────────────────────────────────────────────────────
+  {
+    name: 'spark-management',
+    package: '@chkp/spark-management-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/spark-management-mcp'],
+    description: 'Centralized management and visibility for Check Point Quantum Spark SMB appliances — query gateway configurations, user access, security plans, and device health.',
+    features: ['Spark appliance management', 'User access queries', 'Security plan review', 'Device health monitoring'],
+    useCases: ['SMB fleet management', 'Remote branch health checks', 'Security plan compliance', 'User access auditing'],
+    env: ['CLIENT_ID', 'SECRET_KEY', 'INFINITY_PORTAL_URL', 'REGION']
+  },
+  // ── Cloud & Documentation ─────────────────────────────────────────────────
+  {
+    name: 'documentation-tool',
+    package: '@chkp/documentation-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/documentation-mcp'],
+    description: 'Provide seamless access to Check Point product documentation, enabling AI assistants to query and retrieve accurate product information and guidance.',
+    features: ['Product documentation search', 'Knowledge base queries', 'Technical article retrieval', 'Multi-region support'],
+    useCases: ['Configuration guidance', 'Feature discovery', 'Troubleshooting documentation lookup', 'Best practice research'],
+    env: ['CLIENT_ID', 'SECRET_KEY', 'AUTH_URL', 'REGION']
+  },
+  {
+    name: 'argos-erm',
+    package: '@chkp/argos-erm-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/argos-erm-mcp'],
+    description: 'Programmatic access to Check Point Argos External Risk Management platform for AI-powered attack surface monitoring and external threat analysis.',
+    features: ['External attack surface queries', 'Risk scoring and prioritization', 'Asset exposure monitoring', 'Threat intelligence integration'],
+    useCases: ['Attack surface discovery', 'External vulnerability assessment', 'Brand protection monitoring', 'Third-party risk analysis'],
+    env: ['ARGOS_HOST', 'ARGOS_API_KEY', 'ARGOS_CUSTOMER_ID']
+  },
+  {
+    name: 'cpinfo-analysis',
+    package: '@chkp/cpinfo-analysis-mcp',
+    command: 'npx',
+    args: ['-y', '@chkp/cpinfo-analysis-mcp'],
+    description: 'Expose Check Point CPInfo diagnostic data in a structured, AI-ready format for analysis and troubleshooting of appliance configurations, performance metrics, security events, and system health.',
+    features: ['CPInfo file parsing', 'Configuration analysis', 'Performance metrics extraction', 'Security event review', 'System health diagnostics'],
+    useCases: ['Appliance troubleshooting', 'Support case preparation', 'Performance baselining', 'Configuration drift detection'],
+    env: []
+  },
 ];
 
 function base64Encode(str) {
