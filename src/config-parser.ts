@@ -118,9 +118,58 @@ const STORE_DIR_NAMES = {
   linux: join(homedir(), '.config', 'mcp-inspector'),
 };
 
+const LOG_DIR_NAMES = {
+  darwin: join(homedir(), 'Library', 'Logs', 'Claude'),
+  win32: join(process.env.APPDATA || '', 'Claude', 'logs'),
+  linux: join(homedir(), '.config', 'Claude', 'logs'),
+};
+
 function getStoreDir(): string {
   const os = platform() as keyof typeof STORE_DIR_NAMES;
   return STORE_DIR_NAMES[os] || STORE_DIR_NAMES.linux;
+}
+
+export function getLogDir(): string {
+  const os = platform() as keyof typeof LOG_DIR_NAMES;
+  return LOG_DIR_NAMES[os] || LOG_DIR_NAMES.linux;
+}
+
+export function getServerLogPath(serverName: string): string {
+  const logDir = getLogDir();
+  return join(logDir, `mcp-server-${serverName}.log`);
+}
+
+export function readServerLog(serverName: string, maxLines = 500): { success: boolean; log?: string; error?: string } {
+  const logPath = getServerLogPath(serverName);
+
+  if (!existsSync(logPath)) {
+    return { success: false, error: `Log file not found: ${logPath}` };
+  }
+
+  try {
+    const content = readFileSync(logPath, 'utf-8');
+    const lines = content.split('\n');
+    const lastLines = lines.slice(-maxLines).join('\n');
+    return { success: true, log: lastLines };
+  } catch (err) {
+    return { success: false, error: `Failed to read log: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+export function getAvailableLogs(): { success: boolean; logs?: string[]; error?: string } {
+  const logDir = getLogDir();
+
+  if (!existsSync(logDir)) {
+    return { success: false, error: `Log directory not found: ${logDir}` };
+  }
+
+  try {
+    const files = readdirSync(logDir);
+    const mcpLogs = files.filter(f => f.startsWith('mcp-server-') && f.endsWith('.log'));
+    return { success: true, logs: mcpLogs };
+  } catch (err) {
+    return { success: false, error: `Failed to read logs: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }
 
 function getDisabledStorePath(): string {

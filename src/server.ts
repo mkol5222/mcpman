@@ -1,6 +1,6 @@
 import { serve, getDirname } from './http-server.ts';
 import { serveStaticFile } from './http-server.ts';
-import { loadConfig, saveConfig, enableServer, disableServer, getConfigPath, findConfigPath, loadRawConfigFile, loadGlobalEnv, addGlobalEnvVar, removeGlobalEnvVar, loadDisabledServers, saveDisabledServers } from './config-parser.ts';
+import { loadConfig, saveConfig, enableServer, disableServer, getConfigPath, findConfigPath, loadRawConfigFile, loadGlobalEnv, addGlobalEnvVar, removeGlobalEnvVar, loadDisabledServers, saveDisabledServers, getLogDir, getServerLogPath, readServerLog } from './config-parser.ts';
 import { restartClaude, getOS } from './restart.ts';
 import { join } from 'path';
 
@@ -191,6 +191,18 @@ const server = serve({
       }
 
       return error(`Unknown action: ${action}`);
+    }
+
+    if (path === '/api/logs' && req.method === 'GET') {
+      const result = getAvailableLogs();
+      return json(result);
+    }
+
+    if (path.startsWith('/api/logs/') && req.method === 'GET') {
+      const serverName = decodeURIComponent(path.split('/').pop() || '');
+      const maxLines = parseInt(url.searchParams.get('maxLines') || '500');
+      const result = readServerLog(serverName, maxLines);
+      return json(result);
     }
 
     if (path === '/api/restart' && req.method === 'POST') {

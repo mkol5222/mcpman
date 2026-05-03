@@ -558,16 +558,46 @@ function hideConfigInfo() {
   configInfoEl.classList.add('hidden');
 }
 
-function renderServers(servers) {
-  serversListEl.innerHTML = '';
+function renderServers(servers, searchQuery = '') {
+  const searchHtml = `
+    <div class="servers-search">
+      <input type="text" id="serversSearchInput" placeholder="Search servers..." class="servers-search-input" value="${escapeHtml(searchQuery)}">
+    </div>
+  `;
 
-  servers.forEach((server, index) => {
+  let filteredServers = servers;
+  if (searchQuery) {
+    const query = searchQuery.toLowerCase();
+    filteredServers = servers.filter(server => {
+      const nameMatch = server.name.toLowerCase().includes(query);
+      const commandMatch = server.config.command.toLowerCase().includes(query);
+      const argsMatch = server.config.args.some(arg => arg.toLowerCase().includes(query));
+      return nameMatch || commandMatch || argsMatch;
+    });
+  }
+
+  const cardsHtml = filteredServers.map((server, idx) => {
     const card = document.createElement('div');
     card.className = 'server-card';
     card.innerHTML = createServerCardHTML(server);
+    return card.outerHTML;
+  }).join('');
+
+  serversListEl.innerHTML = searchHtml + cardsHtml;
+
+  const searchInput = document.getElementById('serversSearchInput');
+  searchInput.addEventListener('input', (e) => {
+    renderServers(servers, e.target.value);
+  });
+
+  filteredServers.forEach((server, idx) => {
+    const card = serversListEl.children[idx + 1];
+    if (!card) return;
+
     card.addEventListener('click', (e) => {
       if (!e.target.closest('.card-actions')) {
-        showServerModal(index);
+        const originalIndex = servers.indexOf(server);
+        showServerModal(originalIndex);
       }
     });
 
@@ -592,8 +622,29 @@ function renderServers(servers) {
       });
     }
 
-    serversListEl.appendChild(card);
+    const logsBtn = card.querySelector('[data-logs-server]');
+    if (logsBtn) {
+      logsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const serverName = logsBtn.dataset.logsServer;
+        showLogModal(serverName);
+      });
+    }
   });
+
+  if (filteredServers.length === 0 && searchQuery) {
+    const noResults = document.createElement('div');
+    noResults.className = 'no-servers';
+    noResults.innerHTML = `
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <h2>No Matching Servers</h2>
+      <p>No servers match your search "${escapeHtml(searchQuery)}"</p>
+    `;
+    serversListEl.appendChild(noResults);
+  }
 
   serversListEl.classList.remove('hidden');
 }
@@ -624,6 +675,14 @@ function createServerCardHTML(server) {
           </button>
           <button class="btn btn-sm btn-toggle" data-toggle data-server="${escapeHtml(server.name)}" data-enable="${isDisabled}">
             ${toggleLabel}
+          </button>
+          <button class="btn btn-sm btn-icon btn-logs" data-logs-server="${escapeHtml(server.name)}" title="View Logs">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
           </button>
         </div>
       </div>
@@ -954,6 +1013,100 @@ function hideCatalogModal() {
   document.getElementById('catalogSearchInput').value = '';
 }
 
+let logTailEnabled = true;
+let logTailInterval = null;
+let currentLogServer = null;
+
+function showLogModal(serverName) {
+  currentLogServer = serverName;
+  logTailEnabled = true;
+  document.getElementById('logModalTitle').textContent = `Logs: ${serverName}`;
+  document.getElementById('logModal').classList.remove('hidden');
+  updateLogTailButton();
+  loadLog(serverName);
+  startLogTailing();
+}
+
+function hideLogModal() {
+  document.getElementById('logModal').classList.add('hidden');
+  document.getElementById('logContent').innerHTML = '';
+  document.getElementById('logFilterInput').value = '';
+  stopLogTailing();
+  currentLogServer = null;
+}
+
+function toggleLogTail() {
+  logTailEnabled = !logTailEnabled;
+  updateLogTailButton();
+  if (logTailEnabled) {
+    startLogTailing();
+  } else {
+    stopLogTailing();
+  }
+}
+
+function updateLogTailButton() {
+  const icon = document.getElementById('logTailIcon');
+  const label = document.getElementById('logTailLabel');
+  if (logTailEnabled) {
+    icon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+    label.textContent = 'Pause';
+  } else {
+    icon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+    label.textContent = 'Resume';
+  }
+}
+
+function startLogTailing() {
+  if (logTailInterval) return;
+  logTailInterval = setInterval(() => {
+    if (logTailEnabled && currentLogServer) {
+      loadLog(currentLogServer);
+    }
+  }, 2000);
+}
+
+function stopLogTailing() {
+  if (logTailInterval) {
+    clearInterval(logTailInterval);
+    logTailInterval = null;
+  }
+}
+
+async function loadLog(serverName) {
+  try {
+    const response = await fetch(`/api/logs/${encodeURIComponent(serverName)}?maxLines=500`);
+    const result = await response.json();
+
+    if (result.success) {
+      displayLog(result.log || '');
+    } else {
+      displayLog(`Error loading log: ${result.error || 'Unknown error'}`);
+    }
+  } catch (err) {
+    displayLog(`Error loading log: ${err.message}`);
+  }
+}
+
+function displayLog(logText) {
+  const logContent = document.getElementById('logContent');
+  const filterInput = document.getElementById('logFilterInput');
+  const filter = filterInput.value.toLowerCase();
+
+  let lines = logText.split('\n');
+  if (filter) {
+    lines = lines.filter(line => line.toLowerCase().includes(filter));
+  }
+
+  logContent.textContent = lines.join('\n');
+}
+
+function filterLog() {
+  if (currentLogServer) {
+    loadLog(currentLogServer);
+  }
+}
+
 function renderCatalog(catalog) {
   const body = document.getElementById('catalogModalBody');
   if (catalog.length === 0) {
@@ -1121,6 +1274,20 @@ document.getElementById('addServerBtn').addEventListener('click', () => {
 document.getElementById('catalogModalClose').addEventListener('click', hideCatalogModal);
 document.getElementById('catalogModal').querySelector('.modal-backdrop').addEventListener('click', hideCatalogModal);
 
+document.getElementById('logModalClose').addEventListener('click', hideLogModal);
+document.getElementById('logModal').querySelector('.modal-backdrop').addEventListener('click', hideLogModal);
+document.getElementById('toggleLogTailBtn').addEventListener('click', toggleLogTail);
+document.getElementById('refreshLogBtn').addEventListener('click', () => {
+  if (currentLogServer) {
+    loadLog(currentLogServer);
+  }
+});
+document.getElementById('clearLogFilterBtn').addEventListener('click', () => {
+  document.getElementById('logFilterInput').value = '';
+  filterLog();
+});
+document.getElementById('logFilterInput').addEventListener('input', filterLog);
+
 document.getElementById('catalogSearchInput').addEventListener('input', (e) => {
   const query = e.target.value.toLowerCase();
   const filtered = MCP_CATALOG.filter(server =>
@@ -1157,6 +1324,8 @@ document.addEventListener('keydown', (e) => {
       hideConfigEditor();
     } else if (globalEnvOpen) {
       hideGlobalEnv();
+    } else if (!document.getElementById('logModal').classList.contains('hidden')) {
+      hideLogModal();
     } else if (!document.getElementById('jsonModal').classList.contains('hidden')) {
       hideJsonModal();
     } else if (!document.getElementById('catalogModal').classList.contains('hidden')) {
