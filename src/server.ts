@@ -165,6 +165,34 @@ const server = serve({
       }
     }
 
+    if (path.startsWith('/api/config/servers/') && req.method === 'DELETE') {
+      const serverName = decodeURIComponent(path.split('/').pop() || '');
+
+      const result = loadConfig(configPath);
+
+      if (!result.found || !result.config) {
+        return error('Configuration not found');
+      }
+
+      if (result.config.mcpServers[serverName]) {
+        delete result.config.mcpServers[serverName];
+        const saveResult = saveConfig(result.config, configPath || findConfigPath() || undefined);
+        if (!saveResult.success) {
+          return json(saveResult);
+        }
+        return json({ success: true, message: `Server "${serverName}" removed` });
+      }
+
+      const disabledServers = loadDisabledServers();
+      if (disabledServers[serverName]) {
+        delete disabledServers[serverName];
+        saveDisabledServers(disabledServers);
+        return json({ success: true, message: `Server "${serverName}" removed` });
+      }
+
+      return error(`Server "${serverName}" not found`);
+    }
+
     if (path === '/api/restart' && req.method === 'POST') {
       const result = restartClaude();
       return json(result);

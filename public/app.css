@@ -803,10 +803,20 @@ body {
   font-size: 0.85rem;
 }
 
-.env-key {
+.env-key-input {
+  width: 140px;
+  padding: 4px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   color: var(--accent);
   font-family: 'SF Mono', 'Fira Code', monospace;
-  min-width: 120px;
+  font-size: 0.8rem;
+}
+
+.env-key-input:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .env-value-input {
@@ -823,11 +833,6 @@ body {
 .env-value-input:focus {
   outline: none;
   border-color: var(--accent);
-}
-
-.env-value {
-  color: var(--text-secondary);
-  font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
 .env-empty {

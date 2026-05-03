@@ -456,6 +456,28 @@ async function toggleServer(serverName, enable) {
   }
 }
 
+async function removeServer(serverName) {
+  try {
+    const response = await fetch(`/api/config/servers/${encodeURIComponent(serverName)}`, {
+      method: 'DELETE',
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast(result.message, 'success');
+      await loadConfig();
+      return true;
+    }
+
+    showToast(result.message, 'error');
+    return false;
+  } catch (err) {
+    showToast(`Failed to remove server: ${err.message}`, 'error');
+    return false;
+  }
+}
+
 async function restartClaude() {
   const activeCount = currentServers.filter(s => s.status === 'active').length;
   const disabledCount = currentServers.filter(s => s.status === 'disabled').length;
@@ -559,6 +581,17 @@ function renderServers(servers) {
       });
     }
 
+    const removeBtn = card.querySelector('[data-remove-server]');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const serverName = removeBtn.dataset.removeServer;
+        if (confirm(`Are you sure you want to remove server "${serverName}"?`)) {
+          await removeServer(serverName);
+        }
+      });
+    }
+
     serversListEl.appendChild(card);
   });
 
@@ -583,6 +616,12 @@ function createServerCardHTML(server) {
           ${statusLabel}
         </span>
         <div class="card-actions">
+          <button class="btn btn-sm btn-danger btn-remove" data-remove-server="${escapeHtml(server.name)}" title="Remove server">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
           <button class="btn btn-sm btn-toggle" data-toggle data-server="${escapeHtml(server.name)}" data-enable="${isDisabled}">
             ${toggleLabel}
           </button>
@@ -657,18 +696,22 @@ function showServerModal(serverIndex) {
               <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
             </svg>
           </button>
+          <button id="addEnvVarBtn" class="btn btn-xs btn-icon" title="Add Environment Variable">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
         </div>
-        <div class="env-vars">
+        <div class="env-vars" id="envVarsContainer">
           ${envVars.map(([key, value]) => `
-            <div class="env-var">
-              <span class="env-key">${escapeHtml(key)}</span>
+            <div class="env-var" data-key="${escapeHtml(key)}">
+              <input type="text" class="env-key-input" value="${escapeHtml(key)}" data-old-key="${escapeHtml(key)}">
               <input type="text" class="env-value-input" value="${escapeHtml(value)}" data-key="${escapeHtml(key)}">
-              <button class="btn btn-xs btn-icon fetch-single-env" data-key="${escapeHtml(key)}" title="Fetch from Global Env">
+              <button class="btn btn-xs btn-icon btn-remove-env" data-key="${escapeHtml(key)}" title="Remove">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 2v6h-6"/>
-                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
-                  <path d="M3 22v-6h6"/>
-                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
             </div>
@@ -689,8 +732,14 @@ function showServerModal(serverIndex) {
               <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
             </svg>
           </button>
+          <button id="addEnvVarBtn" class="btn btn-xs btn-icon" title="Add Environment Variable">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
         </div>
-        <div class="env-vars">
+        <div class="env-vars" id="envVarsContainer">
           <div class="env-empty">No environment variables</div>
         </div>
       </div>
@@ -729,15 +778,77 @@ function showServerModal(serverIndex) {
     });
   });
 
+  document.querySelectorAll('.env-key-input').forEach(input => {
+    input.addEventListener('input', () => {
+      hasUnsavedChanges = true;
+    });
+  });
+
+  document.getElementById('addEnvVarBtn')?.addEventListener('click', () => {
+    const container = document.getElementById('envVarsContainer');
+    const emptyMsg = container.querySelector('.env-empty');
+    if (emptyMsg) emptyMsg.remove();
+
+    const newRow = document.createElement('div');
+    newRow.className = 'env-var';
+    newRow.innerHTML = `
+      <input type="text" class="env-key-input" placeholder="Key" data-new="true">
+      <input type="text" class="env-value-input" placeholder="Value" data-new="true">
+      <button class="btn btn-xs btn-icon btn-remove-env" data-key="" title="Remove">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    `;
+    container.appendChild(newRow);
+    hasUnsavedChanges = true;
+
+    newRow.querySelector('.btn-remove-env').addEventListener('click', () => {
+      newRow.remove();
+      const remaining = container.querySelectorAll('.env-var');
+      if (remaining.length === 0) {
+        container.innerHTML = '<div class="env-empty">No environment variables</div>';
+      }
+      hasUnsavedChanges = true;
+    });
+
+    newRow.querySelector('.env-key-input').addEventListener('input', () => {
+      hasUnsavedChanges = true;
+    });
+
+    newRow.querySelector('.env-value-input').addEventListener('input', () => {
+      hasUnsavedChanges = true;
+    });
+  });
+
+  document.querySelectorAll('.btn-remove-env').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = btn.closest('.env-var');
+      row.remove();
+      const container = document.getElementById('envVarsContainer');
+      const remaining = container.querySelectorAll('.env-var');
+      if (remaining.length === 0) {
+        container.innerHTML = '<div class="env-empty">No environment variables</div>';
+      }
+      hasUnsavedChanges = true;
+    });
+  });
+
   document.getElementById('viewJsonBtn').addEventListener('click', () => {
     showJsonModal(server);
   });
 
   document.getElementById('saveServerBtn').addEventListener('click', async () => {
-    const inputs = modalBody.querySelectorAll('.env-value-input');
     const env = {};
-    inputs.forEach(input => {
-      env[input.dataset.key] = input.value;
+    const rows = modalBody.querySelectorAll('.env-var');
+    rows.forEach(row => {
+      const keyInput = row.querySelector('.env-key-input');
+      const valueInput = row.querySelector('.env-value-input');
+      const key = keyInput.value.trim();
+      if (key) {
+        env[key] = valueInput.value;
+      }
     });
     const success = await saveServerEnv(server.name, env);
     if (success) {
@@ -797,21 +908,27 @@ async function saveServerEnv(serverName, env) {
 
 function fetchAllEnvVars(server) {
   const globalEnv = loadFromLocalStorage() || currentGlobalEnv;
-  const inputs = modalBody.querySelectorAll('.env-value-input');
-  inputs.forEach(input => {
-    const key = input.dataset.key;
-    if (globalEnv[key] !== undefined) {
-      input.value = globalEnv[key];
+  const rows = modalBody.querySelectorAll('.env-var');
+  rows.forEach(row => {
+    const keyInput = row.querySelector('.env-key-input');
+    const valueInput = row.querySelector('.env-value-input');
+    const key = keyInput.value.trim();
+    if (key && globalEnv[key] !== undefined) {
+      valueInput.value = globalEnv[key];
     }
   });
 }
 
 function fetchSingleEnvVar(server, key) {
   const globalEnv = loadFromLocalStorage() || currentGlobalEnv;
-  const input = modalBody.querySelector(`.env-value-input[data-key="${CSS.escape(key)}"]`);
-  if (input && globalEnv[key] !== undefined) {
-    input.value = globalEnv[key];
-  }
+  const rows = modalBody.querySelectorAll('.env-var');
+  rows.forEach(row => {
+    const keyInput = row.querySelector('.env-key-input');
+    const valueInput = row.querySelector('.env-value-input');
+    if (keyInput.value.trim() === key && globalEnv[key] !== undefined) {
+      valueInput.value = globalEnv[key];
+    }
+  });
 }
 
 function showJsonModal(server) {
