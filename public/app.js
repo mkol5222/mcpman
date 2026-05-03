@@ -12,10 +12,12 @@ const configViewer = document.getElementById('configViewer');
 const configContent = document.getElementById('configContent');
 const configTextarea = document.getElementById('configTextarea');
 const viewConfigBtn = document.getElementById('viewConfigBtn');
+const viewGlobalEnvBtn = document.getElementById('viewGlobalEnvBtn');
 const editConfigBtn = document.getElementById('editConfigBtn');
 const saveConfigBtn = document.getElementById('saveConfigBtn');
 const cancelConfigBtn = document.getElementById('cancelConfigBtn');
 const closeConfigBtn = document.getElementById('closeConfigBtn');
+const closeGlobalEnvBtn = document.getElementById('closeGlobalEnvBtn');
 const serversListEl = document.getElementById('serversList');
 const noServersEl = document.getElementById('noServers');
 const refreshBtn = document.getElementById('refreshBtn');
@@ -25,14 +27,76 @@ const modalTitle = document.getElementById('modalTitle');
 const modalBody = document.getElementById('modalBody');
 const modalFooter = document.getElementById('modalFooter');
 const modalClose = document.getElementById('modalClose');
+const globalEnvSection = document.getElementById('globalEnvSection');
 
 let validationWarningEl = null;
 
 let currentOS = 'unknown';
 let currentConfig = null;
 let currentServers = [];
+let currentGlobalEnv = {};
 let configEditorOpen = false;
 let configEditMode = false;
+let globalEnvOpen = false;
+
+const ENCRYPTION_KEY = 'mcpman-env-secret';
+const LOCAL_STORAGE_KEY = 'mcpman_global_env';
+
+const MCP_CATALOG = [
+  {
+    name: 'management',
+    command: 'infinity-mcp-protect',
+    args: ['npx', '-y', '@chkp/quantum-management-mcp@latest'],
+    description: 'Quantum management MCP server',
+    env: ['USERNAME', 'PASSWORD', 'MANAGEMENT_PORT', 'MANAGEMENT_HOST']
+  },
+  {
+    name: 'management-logs',
+    command: 'infinity-mcp-protect',
+    args: ['npx', '-y', '@chkp/management-logs-mcp@latest'],
+    description: 'Management logs MCP server',
+    env: ['USERNAME', 'PASSWORD', 'MANAGEMENT_PORT', 'MANAGEMENT_HOST']
+  }
+];
+
+function base64Encode(str) {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+function base64Decode(str) {
+  return decodeURIComponent(escape(atob(str)));
+}
+
+function encrypt(data) {
+  const jsonStr = JSON.stringify(data);
+  const encoded = base64Encode(jsonStr);
+  return encoded.split('').reverse().join('');
+}
+
+function decrypt(encrypted) {
+  try {
+    const reversed = encrypted.split('').reverse().join('');
+    const decoded = base64Decode(reversed);
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
+function loadFromLocalStorage() {
+  const encrypted = localStorage.getItem(LOCAL_STORAGE_KEY);
+  if (!encrypted) return null;
+  return decrypt(encrypted);
+}
+
+function saveToLocalStorage(data) {
+  const encrypted = encrypt(data);
+  localStorage.setItem(LOCAL_STORAGE_KEY, encrypted);
+}
+
+function clearLocalStorage() {
+  localStorage.removeItem(LOCAL_STORAGE_KEY);
+}
 
 function showValidationWarning(validation) {
   if (!validation || validation.valid) {
@@ -109,6 +173,163 @@ async function loadConfig() {
     hideLoading();
     showError(`Network error: ${err.message}`);
   }
+}
+
+async function loadGlobalEnv() {
+  try {
+    const response = await fetch('/api/global-env');
+    const result = await response.json();
+
+    if (result.success) {
+      currentGlobalEnv = result.env || {};
+      renderGlobalEnv();
+    }
+  } catch (err) {
+    console.error('Failed to load global env:', err);
+  }
+}
+
+function renderGlobalEnv() {
+  const listEl = document.getElementById('globalEnvList');
+  const entries = Object.entries(currentGlobalEnv);
+  const savedValues = loadFromLocalStorage() || {};
+
+  if (entries.length === 0) {
+    listEl.innerHTML = '<div class="no-env-vars">No environment variables configured</div>';
+    return;
+  }
+
+  listEl.innerHTML = entries.map(([key, value]) => {
+    const displayValue = savedValues[key] || value;
+    const isPassword = key.toLowerCase().includes('password') || key.toLowerCase() === 'pass';
+    const maskedDisplay = isPassword ? maskValue(displayValue) : escapeHtml(displayValue);
+    const inputType = isPassword ? 'password' : 'text';
+
+    return `
+      <div class="env-var-row" data-key="${escapeHtml(key)}">
+        <span class="env-var-key">${escapeHtml(key)}</span>
+        <div class="env-var-value-wrapper">
+          <input type="${inputType}" class="env-input env-value-input" value="${escapeHtml(displayValue)}" data-key="${escapeHtml(key)}" data-original="${escapeHtml(value)}">
+        </div>
+        <button class="btn btn-sm" data-save-env="${escapeHtml(key)}" title="Save">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+        </button>
+        <button class="btn btn-sm btn-danger" data-remove-env="${escapeHtml(key)}" title="Remove">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  listEl.querySelectorAll('[data-save-env]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const key = btn.dataset.saveEnv;
+      const input = listEl.querySelector(`input[data-key="${CSS.escape(key)}"]`);
+      const newValue = input.value;
+      await updateGlobalEnvVar(key, newValue);
+    });
+  });
+
+  listEl.querySelectorAll('[data-remove-env]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const key = btn.dataset.removeEnv;
+      await removeGlobalEnvVar(key);
+    });
+  });
+
+  listEl.querySelectorAll('.env-value-input').forEach(input => {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const key = input.dataset.key;
+        updateGlobalEnvVar(key, input.value);
+      }
+    });
+  });
+}
+
+async function updateGlobalEnvVar(key, value) {
+  const savedValues = loadFromLocalStorage() || {};
+  savedValues[key] = value;
+  saveToLocalStorage(savedValues);
+
+  try {
+    const response = await fetch('/api/global-env', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value }),
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast(`Updated ${key}`, 'success');
+    } else {
+      showToast(result.message, 'error');
+    }
+  } catch (err) {
+    showToast(`Failed to update environment variable: ${err.message}`, 'error');
+  }
+}
+
+async function addGlobalEnvVar(key, value) {
+  try {
+    const response = await fetch('/api/global-env', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value }),
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast(result.message, 'success');
+      await loadGlobalEnv();
+    } else {
+      showToast(result.message, 'error');
+    }
+  } catch (err) {
+    showToast(`Failed to add environment variable: ${err.message}`, 'error');
+  }
+}
+
+async function removeGlobalEnvVar(key) {
+  try {
+    const response = await fetch(`/api/global-env/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast(result.message, 'success');
+      const savedValues = loadFromLocalStorage() || {};
+      delete savedValues[key];
+      saveToLocalStorage(savedValues);
+      await loadGlobalEnv();
+    } else {
+      showToast(result.message, 'error');
+    }
+  } catch (err) {
+    showToast(`Failed to remove environment variable: ${err.message}`, 'error');
+  }
+}
+
+function showGlobalEnv() {
+  globalEnvOpen = true;
+  globalEnvSection.classList.remove('hidden');
+  loadGlobalEnv();
+}
+
+function hideGlobalEnv() {
+  globalEnvOpen = false;
+  globalEnvSection.classList.add('hidden');
 }
 
 async function loadRawConfig() {
@@ -302,13 +523,13 @@ function hideConfigInfo() {
 function renderServers(servers) {
   serversListEl.innerHTML = '';
 
-  servers.forEach(server => {
+  servers.forEach((server, index) => {
     const card = document.createElement('div');
     card.className = 'server-card';
     card.innerHTML = createServerCardHTML(server);
     card.addEventListener('click', (e) => {
       if (!e.target.closest('.card-actions')) {
-        showServerModal(server);
+        showServerModal(index);
       }
     });
 
@@ -373,7 +594,8 @@ function hideNoServers() {
   noServersEl.classList.add('hidden');
 }
 
-function showServerModal(server) {
+function showServerModal(serverIndex) {
+  const server = currentServers[serverIndex];
   modalTitle.textContent = server.name;
 
   const fullCommand = `${server.config.command} ${server.config.args.join(' ')}`;
@@ -409,14 +631,51 @@ function showServerModal(server) {
   if (envVars.length > 0) {
     html += `
       <div class="detail-section">
-        <div class="detail-label">Environment Variables</div>
+        <div class="detail-label">
+          Environment Variables
+          <button id="fetchAllEnvBtn" class="btn btn-xs btn-icon" title="Fetch all from Global Env">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 2v6h-6"/>
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+              <path d="M3 22v-6h6"/>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+            </svg>
+          </button>
+        </div>
         <div class="env-vars">
           ${envVars.map(([key, value]) => `
             <div class="env-var">
               <span class="env-key">${escapeHtml(key)}</span>
-              <span class="env-value">${maskValue(escapeHtml(value))}</span>
+              <input type="text" class="env-value-input" value="${escapeHtml(value)}" data-key="${escapeHtml(key)}">
+              <button class="btn btn-xs btn-icon fetch-single-env" data-key="${escapeHtml(key)}" title="Fetch from Global Env">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 2v6h-6"/>
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                  <path d="M3 22v-6h6"/>
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                </svg>
+              </button>
             </div>
           `).join('')}
+        </div>
+      </div>
+    `;
+  } else {
+    html += `
+      <div class="detail-section">
+        <div class="detail-label">
+          Environment Variables
+          <button id="fetchAllEnvBtn" class="btn btn-xs btn-icon" title="Fetch all from Global Env">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 2v6h-6"/>
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+              <path d="M3 22v-6h6"/>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+            </svg>
+          </button>
+        </div>
+        <div class="env-vars">
+          <div class="env-empty">No environment variables</div>
         </div>
       </div>
     `;
@@ -424,36 +683,228 @@ function showServerModal(server) {
 
   modalBody.innerHTML = html;
 
-  const toggleLabel = isDisabled ? 'Enable Server' : 'Disable Server';
   modalFooter.innerHTML = `
-    <div class="toggle-container">
-      <span class="toggle-label">${toggleLabel}</span>
-      <label class="toggle">
-        <input type="checkbox" id="modalToggle" ${isDisabled ? '' : 'checked'}>
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
+    <button id="viewJsonBtn" class="btn btn-sm btn-secondary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+      View JSON
+    </button>
+    <button id="cancelServerBtn" class="btn btn-sm">Cancel</button>
+    <button id="saveServerBtn" class="btn btn-sm btn-success">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+        <polyline points="17 21 17 13 7 13 7 21"/>
+        <polyline points="7 3 7 8 15 8"/>
+      </svg>
+      Save
+    </button>
   `;
 
-  const modalToggle = document.getElementById('modalToggle');
-  modalToggle.addEventListener('change', async () => {
-    const enable = modalToggle.checked;
-    modalToggle.disabled = true;
-    const success = await toggleServer(server.name, enable);
-    modalToggle.disabled = false;
+  let hasUnsavedChanges = false;
 
+  document.querySelectorAll('.env-value-input').forEach(input => {
+    input.addEventListener('input', () => {
+      hasUnsavedChanges = true;
+    });
+  });
+
+  document.getElementById('viewJsonBtn').addEventListener('click', () => {
+    showJsonModal(server);
+  });
+
+  document.getElementById('saveServerBtn').addEventListener('click', async () => {
+    const inputs = modalBody.querySelectorAll('.env-value-input');
+    const env = {};
+    inputs.forEach(input => {
+      env[input.dataset.key] = input.value;
+    });
+    const success = await saveServerEnv(server.name, env);
     if (success) {
+      hasUnsavedChanges = false;
       hideModal();
-    } else {
-      modalToggle.checked = !enable;
+      showToast('Server configuration saved', 'success');
+      await loadConfig();
     }
+  });
+
+  document.getElementById('cancelServerBtn').addEventListener('click', () => {
+    if (hasUnsavedChanges) {
+      if (confirm('You have unsaved changes. Discard them?')) {
+        hasUnsavedChanges = false;
+        hideModal();
+      }
+    } else {
+      hideModal();
+    }
+  });
+
+  document.getElementById('fetchAllEnvBtn')?.addEventListener('click', () => {
+    fetchAllEnvVars(server);
+    hasUnsavedChanges = true;
+  });
+
+  document.querySelectorAll('.fetch-single-env').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.key;
+      fetchSingleEnvVar(server, key);
+      hasUnsavedChanges = true;
+    });
   });
 
   serverModal.classList.remove('hidden');
 }
 
+async function saveServerEnv(serverName, env) {
+  try {
+    const response = await fetch(`/api/config/servers/${encodeURIComponent(serverName)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ env }),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      showToast(result.message || 'Failed to save', 'error');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    showToast(`Failed to save: ${err.message}`, 'error');
+    return false;
+  }
+}
+
+function fetchAllEnvVars(server) {
+  const globalEnv = loadFromLocalStorage() || currentGlobalEnv;
+  const inputs = modalBody.querySelectorAll('.env-value-input');
+  inputs.forEach(input => {
+    const key = input.dataset.key;
+    if (globalEnv[key] !== undefined) {
+      input.value = globalEnv[key];
+    }
+  });
+}
+
+function fetchSingleEnvVar(server, key) {
+  const globalEnv = loadFromLocalStorage() || currentGlobalEnv;
+  const input = modalBody.querySelector(`.env-value-input[data-key="${CSS.escape(key)}"]`);
+  if (input && globalEnv[key] !== undefined) {
+    input.value = globalEnv[key];
+  }
+}
+
+function showJsonModal(server) {
+  const jsonContent = JSON.stringify({ [server.name]: server.config }, null, 2);
+  const jsonModal = document.getElementById('jsonModal');
+  const jsonModalBody = document.getElementById('jsonModalBody');
+
+  jsonModalBody.innerHTML = `<pre class="json-content"><code>${escapeHtml(jsonContent)}</code></pre>`;
+  jsonModal.classList.remove('hidden');
+}
+
+function hideJsonModal() {
+  document.getElementById('jsonModal').classList.add('hidden');
+}
+
+function showCatalogModal() {
+  document.getElementById('catalogModal').classList.remove('hidden');
+  renderCatalog(MCP_CATALOG);
+}
+
+function hideCatalogModal() {
+  document.getElementById('catalogModal').classList.add('hidden');
+  document.getElementById('catalogSearchInput').value = '';
+}
+
+function renderCatalog(catalog) {
+  const body = document.getElementById('catalogModalBody');
+  if (catalog.length === 0) {
+    body.innerHTML = '<div class="no-env-vars">No matching servers found</div>';
+    return;
+  }
+
+  body.innerHTML = '<div class="catalog-list">' + catalog.map(server => `
+    <div class="catalog-item">
+      <div class="catalog-item-info">
+        <div class="catalog-item-name">${escapeHtml(server.name)}</div>
+        <div class="catalog-item-command">${escapeHtml(server.command)}</div>
+        <div class="catalog-item-args">${escapeHtml(server.args.join(' '))}</div>
+        <div class="catalog-item-env">Env: ${server.env.join(', ')}</div>
+      </div>
+      <div class="catalog-item-action">
+        <button class="btn btn-sm btn-success" data-add-catalog="${escapeHtml(server.name)}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Add
+        </button>
+      </div>
+    </div>
+  `).join('') + '</div>';
+
+  body.querySelectorAll('[data-add-catalog]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const serverName = btn.dataset.addCatalog;
+      addCatalogServer(serverName);
+    });
+  });
+}
+
+async function addCatalogServer(serverName) {
+  const catalogItem = MCP_CATALOG.find(s => s.name === serverName);
+  if (!catalogItem) return;
+
+  const existingServer = currentServers.find(s => s.name === serverName);
+  if (existingServer) {
+    if (!confirm(`Server "${serverName}" already exists. Replace it?`)) {
+      return;
+    }
+  }
+
+  const globalEnv = loadFromLocalStorage() || {};
+  const env = {};
+  catalogItem.env.forEach(key => {
+    env[key] = globalEnv[key] || '';
+  });
+
+  const newServer = {
+    name: catalogItem.name,
+    command: catalogItem.command,
+    args: [...catalogItem.args],
+    env: env
+  };
+
+  try {
+    const response = await fetch('/api/config/servers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: serverName, config: newServer }),
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast(`Server "${serverName}" added`, 'success');
+      hideCatalogModal();
+      await loadConfig();
+    } else {
+      showToast(result.message || 'Failed to add server', 'error');
+    }
+  } catch (err) {
+    showToast(`Failed to add server: ${err.message}`, 'error');
+  }
+}
+
 function hideModal() {
   serverModal.classList.add('hidden');
+  modalBody.innerHTML = '';
+  modalFooter.innerHTML = '';
 }
 
 function escapeHtml(str) {
@@ -502,28 +953,101 @@ configTextarea.addEventListener('input', () => {
 refreshBtn.addEventListener('click', loadConfig);
 restartBtn.addEventListener('click', restartClaude);
 viewConfigBtn.addEventListener('click', () => {
+  hideGlobalEnv();
   if (configEditorOpen) {
     hideConfigEditor();
   } else {
     showConfigEditor();
   }
 });
+viewGlobalEnvBtn.addEventListener('click', () => {
+  hideConfigEditor();
+  if (globalEnvOpen) {
+    hideGlobalEnv();
+  } else {
+    showGlobalEnv();
+  }
+});
 editConfigBtn.addEventListener('click', enterEditMode);
 saveConfigBtn.addEventListener('click', saveRawConfig);
 cancelConfigBtn.addEventListener('click', exitEditMode);
 closeConfigBtn.addEventListener('click', hideConfigEditor);
-modalClose.addEventListener('click', hideModal);
-serverModal.querySelector('.modal-backdrop').addEventListener('click', hideModal);
+closeGlobalEnvBtn.addEventListener('click', hideGlobalEnv);
+
+document.getElementById('addServerBtn').addEventListener('click', () => {
+  showCatalogModal();
+});
+
+document.getElementById('catalogModalClose').addEventListener('click', hideCatalogModal);
+document.getElementById('catalogModal').querySelector('.modal-backdrop').addEventListener('click', hideCatalogModal);
+
+document.getElementById('catalogSearchInput').addEventListener('input', (e) => {
+  const query = e.target.value.toLowerCase();
+  const filtered = MCP_CATALOG.filter(server =>
+    server.name.toLowerCase().includes(query) ||
+    server.command.toLowerCase().includes(query) ||
+    (server.description && server.description.toLowerCase().includes(query))
+  );
+  renderCatalog(filtered);
+});
+
+modalClose.addEventListener('click', () => {
+  const saveBtn = document.getElementById('saveServerBtn');
+  if (saveBtn) {
+    saveBtn.click();
+  } else {
+    hideModal();
+  }
+});
+serverModal.querySelector('.modal-backdrop').addEventListener('click', () => {
+  const saveBtn = document.getElementById('saveServerBtn');
+  if (saveBtn) {
+    saveBtn.click();
+  } else {
+    hideModal();
+  }
+});
+document.getElementById('jsonModalClose').addEventListener('click', hideJsonModal);
+document.getElementById('jsonModal').querySelector('.modal-backdrop').addEventListener('click', hideJsonModal);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (configEditMode) {
       exitEditMode();
     } else if (configEditorOpen) {
       hideConfigEditor();
+    } else if (globalEnvOpen) {
+      hideGlobalEnv();
+    } else if (!document.getElementById('jsonModal').classList.contains('hidden')) {
+      hideJsonModal();
+    } else if (!document.getElementById('catalogModal').classList.contains('hidden')) {
+      hideCatalogModal();
+    } else if (!serverModal.classList.contains('hidden')) {
+      const saveBtn = document.getElementById('saveServerBtn');
+      if (saveBtn) {
+        saveBtn.click();
+      } else {
+        hideModal();
+      }
     } else {
       hideModal();
     }
   }
+});
+
+document.getElementById('addEnvBtn').addEventListener('click', () => {
+  const keyInput = document.getElementById('newEnvKey');
+  const valueInput = document.getElementById('newEnvValue');
+  const key = keyInput.value.trim();
+  const value = valueInput.value;
+
+  if (!key) {
+    showToast('Key cannot be empty', 'error');
+    return;
+  }
+
+  addGlobalEnvVar(key, value);
+  keyInput.value = '';
+  valueInput.value = '';
 });
 
 loadConfig();

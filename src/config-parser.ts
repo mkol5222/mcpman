@@ -127,6 +127,79 @@ function getDisabledStorePath(): string {
   return join(getStoreDir(), 'disabled-servers.json');
 }
 
+function getGlobalEnvStorePath(): string {
+  return join(getStoreDir(), 'global-env.json');
+}
+
+const DEFAULT_GLOBAL_ENV: Record<string, string> = {
+  USERNAME: 'admin',
+  PASSWORD: 'demo123',
+  demo123: '',
+  MANAGEMENT_PORT: '443',
+  MANAGEMENT_HOST: '35.158.120.110',
+};
+
+export interface GlobalEnvResult {
+  success: boolean;
+  env?: Record<string, string>;
+  message?: string;
+}
+
+export function loadGlobalEnv(): Record<string, string> {
+  const storePath = getGlobalEnvStorePath();
+
+  if (!existsSync(storePath)) {
+    saveGlobalEnv(DEFAULT_GLOBAL_ENV);
+    return { ...DEFAULT_GLOBAL_ENV };
+  }
+
+  try {
+    const raw = readFileSync(storePath, 'utf-8');
+    const data = JSON.parse(raw);
+    return data && typeof data === 'object' ? data : { ...DEFAULT_GLOBAL_ENV };
+  } catch {
+    return { ...DEFAULT_GLOBAL_ENV };
+  }
+}
+
+export function saveGlobalEnv(env: Record<string, string>): void {
+  const storePath = getGlobalEnvStorePath();
+  const dir = dirname(storePath);
+
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  const json = JSON.stringify(env, null, 2);
+  writeFileSync(storePath, json + '\n', 'utf-8');
+}
+
+export function addGlobalEnvVar(key: string, value: string): GlobalEnvResult {
+  if (!key || typeof key !== 'string' || !key.trim()) {
+    return { success: false, message: 'Key cannot be empty' };
+  }
+
+  const trimmedKey = key.trim();
+  const env = loadGlobalEnv();
+  env[trimmedKey] = value;
+  saveGlobalEnv(env);
+
+  return { success: true, message: `Added environment variable: ${trimmedKey}` };
+}
+
+export function removeGlobalEnvVar(key: string): GlobalEnvResult {
+  const env = loadGlobalEnv();
+
+  if (!(key in env)) {
+    return { success: false, message: `Environment variable "${key}" not found` };
+  }
+
+  delete env[key];
+  saveGlobalEnv(env);
+
+  return { success: true, message: `Removed environment variable: ${key}` };
+}
+
 export function getConfigPath(): string {
   const os = platform() as keyof typeof CONFIG_PATHS;
   const getPath = CONFIG_PATHS[os] || CONFIG_PATHS.linux;
@@ -138,7 +211,7 @@ export function findConfigPath(): string | null {
   return existsSync(configPath) ? configPath : null;
 }
 
-function loadDisabledServers(): Record<string, McpServerConfig> {
+export function loadDisabledServers(): Record<string, McpServerConfig> {
   const storePath = getDisabledStorePath();
 
   if (!existsSync(storePath)) {
@@ -154,7 +227,7 @@ function loadDisabledServers(): Record<string, McpServerConfig> {
   }
 }
 
-function saveDisabledServers(servers: Record<string, McpServerConfig>): void {
+export function saveDisabledServers(servers: Record<string, McpServerConfig>): void {
   const storePath = getDisabledStorePath();
   const dir = dirname(storePath);
 

@@ -1,6 +1,6 @@
 import { serve, getDirname } from './http-server.ts';
 import { serveStaticFile } from './http-server.ts';
-import { loadConfig, saveConfig, enableServer, disableServer, getConfigPath, findConfigPath, loadRawConfigFile } from './config-parser.ts';
+import { loadConfig, saveConfig, enableServer, disableServer, getConfigPath, findConfigPath, loadRawConfigFile, loadGlobalEnv, addGlobalEnvVar, removeGlobalEnvVar, loadDisabledServers, saveDisabledServers } from './config-parser.ts';
 import { restartClaude, getOS } from './restart.ts';
 import { join } from 'path';
 
@@ -69,6 +69,38 @@ const server = serve({
       }
     }
 
+    if (path === '/api/config/servers' && req.method === 'POST') {
+      try {
+        const body = await req.json();
+        const { name, config } = body;
+
+        if (!name || typeof name !== 'string') {
+          return error('Server name is required');
+        }
+
+        if (!config || typeof config !== 'object') {
+          return error('Server config is required');
+        }
+
+        const result = loadConfig(configPath);
+
+        if (!result.found || !result.config) {
+          return error('Configuration not found');
+        }
+
+        result.config.mcpServers[name] = config;
+        const saveResult = saveConfig(result.config, configPath || findConfigPath() || undefined);
+
+        if (!saveResult.success) {
+          return json(saveResult);
+        }
+
+        return json({ success: true, message: `Server "${name}" added` });
+      } catch (err) {
+        return error(`Failed to add server: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    }
+
     if (path.startsWith('/api/config/servers/') && req.method === 'POST') {
       const serverName = decodeURIComponent(path.split('/').pop() || '');
       const body = await req.json();
@@ -87,6 +119,52 @@ const server = serve({
       return error(`Unknown action: ${action}`);
     }
 
+    if (path.startsWith('/api/config/servers/') && req.method === 'PUT') {
+      const serverName = decodeURIComponent(path.split('/').pop() || '');
+      const body = await req.json();
+      const { env } = body;
+
+      if (typeof env !== 'object' || env === null) {
+        return error('Invalid env: expected an object');
+      }
+
+      const result = loadConfig(configPath);
+
+      if (!result.found || !result.config) {
+        return error('Configuration not found');
+      }
+
+      let serverConfig = result.config.mcpServers[serverName];
+      let isInDisabled = false;
+
+      if (!serverConfig) {
+        const disabledServers = loadDisabledServers();
+        if (disabledServers[serverName]) {
+          serverConfig = disabledServers[serverName];
+          isInDisabled = true;
+        }
+      }
+
+      if (!serverConfig) {
+        return error(`Server "${serverName}" not found`);
+      }
+
+      serverConfig.env = env;
+
+      if (isInDisabled) {
+        const disabledServers = loadDisabledServers();
+        disabledServers[serverName] = serverConfig;
+        saveDisabledServers(disabledServers);
+        return json({ success: true, message: 'Server configuration saved' });
+      } else {
+        const saveResult = saveConfig(result.config, configPath || findConfigPath() || undefined);
+        if (!saveResult.success) {
+          return json(saveResult);
+        }
+        return json({ success: true, message: 'Server configuration saved' });
+      }
+    }
+
     if (path === '/api/restart' && req.method === 'POST') {
       const result = restartClaude();
       return json(result);
@@ -94,6 +172,28 @@ const server = serve({
 
     if (path === '/api/os') {
       return json({ os: getOS() });
+    }
+
+    if (path === '/api/global-env' && req.method === 'GET') {
+      const env = loadGlobalEnv();
+      return json({ success: true, env });
+    }
+
+    if (path === '/api/global-env' && req.method === 'POST') {
+      try {
+        const body = await req.json();
+        const { key, value } = body;
+        const result = addGlobalEnvVar(key, value);
+        return json(result);
+      } catch (err) {
+        return error(`Failed to add environment variable: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    }
+
+    if (path.startsWith('/api/global-env/') && req.method === 'DELETE') {
+      const key = decodeURIComponent(path.split('/').pop() || '');
+      const result = removeGlobalEnvVar(key);
+      return json(result);
     }
 
     if (path === '/' || path === '/index.html') {

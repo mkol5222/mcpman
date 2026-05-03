@@ -18,6 +18,20 @@
           <h1>MCP Server Manager</h1>
         </div>
         <div class="header-actions">
+          <button id="addServerBtn" class="btn btn-secondary" title="Add Server from Catalog">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add
+          </button>
+          <button id="viewGlobalEnvBtn" class="btn btn-secondary" title="Global Environment Variables">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            Global Env
+          </button>
           <button id="viewConfigBtn" class="btn btn-secondary" title="View/Edit Config">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -83,6 +97,27 @@
         </div>
       </div>
 
+      <div id="globalEnvSection" class="global-env-section hidden">
+        <div class="global-env-header">
+          <div class="global-env-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span>Global Environment Variables</span>
+          </div>
+          <button id="closeGlobalEnvBtn" class="config-editor-close">&times;</button>
+        </div>
+        <div class="global-env-content">
+          <div id="globalEnvList" class="global-env-list"></div>
+          <div class="global-env-add">
+            <input type="text" id="newEnvKey" placeholder="Key" class="env-input">
+            <input type="text" id="newEnvValue" placeholder="Value" class="env-input">
+            <button id="addEnvBtn" class="btn btn-sm btn-success">Add</button>
+          </div>
+        </div>
+      </div>
+
       <div id="configEditor" class="config-editor hidden">
         <div class="config-editor-header">
           <div class="config-editor-title">
@@ -142,6 +177,33 @@
         <div class="modal-body" id="modalBody">
         </div>
         <div class="modal-footer" id="modalFooter">
+        </div>
+      </div>
+    </div>
+
+    <div id="jsonModal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-content-sm">
+        <div class="modal-header">
+          <h2>Server Configuration JSON</h2>
+          <button class="modal-close" id="jsonModalClose">&times;</button>
+        </div>
+        <div class="modal-body" id="jsonModalBody">
+        </div>
+      </div>
+    </div>
+
+    <div id="catalogModal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-content-lg">
+        <div class="modal-header">
+          <h2>MCP Server Catalog</h2>
+          <button class="modal-close" id="catalogModalClose">&times;</button>
+        </div>
+        <div class="catalog-search">
+          <input type="text" id="catalogSearchInput" placeholder="Search servers..." class="catalog-search-input">
+        </div>
+        <div class="modal-body catalog-body" id="catalogModalBody">
         </div>
       </div>
     </div>
