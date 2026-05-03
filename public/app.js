@@ -1016,13 +1016,18 @@ function hideCatalogModal() {
 let logTailEnabled = true;
 let logTailInterval = null;
 let currentLogServer = null;
+let currentLogRaw = '';
+let currentLogEvents = [];
+let logViewMode = 'raw';
 
 function showLogModal(serverName) {
   currentLogServer = serverName;
   logTailEnabled = true;
+  logViewMode = 'raw';
   document.getElementById('logModalTitle').textContent = `Logs: ${serverName}`;
   document.getElementById('logModal').classList.remove('hidden');
   updateLogTailButton();
+  updateLogViewButtons();
   loadLog(serverName);
   startLogTailing();
 }
@@ -1031,8 +1036,13 @@ function hideLogModal() {
   document.getElementById('logModal').classList.add('hidden');
   document.getElementById('logContent').innerHTML = '';
   document.getElementById('logFilterInput').value = '';
+  document.getElementById('logEventsList').innerHTML = '';
+  document.getElementById('logRawPanel').classList.remove('hidden');
+  document.getElementById('logStructuredPanel').classList.add('hidden');
   stopLogTailing();
   currentLogServer = null;
+  currentLogRaw = '';
+  currentLogEvents = [];
 }
 
 function toggleLogTail() {
@@ -1054,6 +1064,25 @@ function updateLogTailButton() {
   } else {
     icon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
     label.textContent = 'Resume';
+  }
+}
+
+function updateLogViewButtons() {
+  document.getElementById('logViewRawBtn').classList.toggle('active', logViewMode === 'raw');
+  document.getElementById('logViewStructuredBtn').classList.toggle('active', logViewMode === 'structured');
+}
+
+function setLogView(mode) {
+  logViewMode = mode;
+  updateLogViewButtons();
+
+  if (mode === 'raw') {
+    document.getElementById('logRawPanel').classList.remove('hidden');
+    document.getElementById('logStructuredPanel').classList.add('hidden');
+  } else {
+    document.getElementById('logRawPanel').classList.add('hidden');
+    document.getElementById('logStructuredPanel').classList.remove('hidden');
+    renderStructuredLog();
   }
 }
 
@@ -1079,7 +1108,12 @@ async function loadLog(serverName) {
     const result = await response.json();
 
     if (result.success) {
-      displayLog(result.log || '');
+      currentLogRaw = result.log || '';
+      currentLogEvents = parseLogToEvents(currentLogRaw);
+      displayLog(currentLogRaw);
+      if (logViewMode === 'structured') {
+        renderStructuredLog();
+      }
     } else {
       displayLog(`Error loading log: ${result.error || 'Unknown error'}`);
     }
@@ -1088,22 +1122,261 @@ async function loadLog(serverName) {
   }
 }
 
-function displayLog(logText) {
-  const logContent = document.getElementById('logContent');
-  const filterInput = document.getElementById('logFilterInput');
-  const filter = filterInput.value.toLowerCase();
+function parseLogToEvents(logText) {
+  const events = [];
+  const lines = logText.split('\n');
 
-  let lines = logText.split('\n');
-  if (filter) {
-    lines = lines.filter(line => line.toLowerCase().includes(filter));
+  let currentEvent = null;
+  let buffer = [];
+
+  function fixTruncatedJson(jsonStr) {
+    const truncatedMatch = jsonStr.match(/\[(\d+)\s+chars\s+truncated\]$/);
+    if (!truncatedMatch) return jsonStr;
+
+    const reconstructed = jsonStr.slice(0, jsonStr.lastIndexOf('['));
+    try {
+      JSON.parse(reconstructed);
+      return reconstructed;
+    } catch {
+      return jsonStr;
+    }
   }
 
-  logContent.textContent = lines.join('\n');
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    if (trimmedLine.startsWith('-->')) {
+      if (currentEvent) {
+        events.push(currentEvent);
+      }
+      let jsonStr = trimmedLine.slice(3).trim();
+      jsonStr = fixTruncatedJson(jsonStr);
+      try {
+        const json = JSON.parse(jsonStr);
+        currentEvent = {
+          direction: 'request',
+          method: json.method || 'unknown',
+          id: json.id,
+          params: json.params,
+          json: jsonStr
+        };
+      } catch {
+        currentEvent = {
+          direction: 'request',
+          method: 'parse_error',
+          id: null,
+          params: null,
+          json: jsonStr
+        };
+      }
+      buffer = [];
+    } else if (trimmedLine.startsWith('<--')) {
+      if (currentEvent) {
+        events.push(currentEvent);
+      }
+      let jsonStr = trimmedLine.slice(3).trim();
+      jsonStr = fixTruncatedJson(jsonStr);
+      try {
+        const json = JSON.parse(jsonStr);
+        currentEvent = {
+          direction: json.error ? 'error' : 'response',
+          method: currentEvent?.method || 'unknown',
+          id: json.id,
+          result: json.result,
+          error: json.error,
+          json: jsonStr
+        };
+      } catch {
+        currentEvent = {
+          direction: 'error',
+          method: 'parse_error',
+          id: null,
+          result: null,
+          error: jsonStr,
+          json: jsonStr
+        };
+      }
+      buffer = [];
+    } else if (trimmedLine.startsWith('[CLD]') || trimmedLine.startsWith('[MCP]') || trimmedLine.startsWith('[NPM]')) {
+      if (currentEvent) {
+        events.push(currentEvent);
+        currentEvent = null;
+      }
+      events.push({
+        direction: 'system',
+        method: 'log',
+        id: null,
+        message: trimmedLine,
+        json: ''
+      });
+    } else if (trimmedLine.includes('{') && trimmedLine.includes('"jsonrpc"')) {
+      let cleanedLine = fixTruncatedJson(trimmedLine);
+      try {
+        const json = JSON.parse(cleanedLine);
+        if (json.method) {
+          if (currentEvent) events.push(currentEvent);
+          currentEvent = {
+            direction: 'request',
+            method: json.method || 'unknown',
+            id: json.id,
+            params: json.params,
+            json: cleanedLine
+          };
+        } else if (json.result !== undefined || json.error) {
+          if (currentEvent) events.push(currentEvent);
+          currentEvent = {
+            direction: json.error ? 'error' : 'response',
+            method: currentEvent?.method || 'unknown',
+            id: json.id,
+            result: json.result,
+            error: json.error,
+            json: cleanedLine
+          };
+        } else {
+          buffer.push(cleanedLine);
+        }
+      } catch {
+        buffer.push(cleanedLine);
+      }
+    } else if (trimmedLine.includes('[...') && trimmedLine.includes('truncated]')) {
+      buffer.push(trimmedLine);
+    } else if (trimmedLine) {
+      if (currentEvent) {
+        events.push(currentEvent);
+        currentEvent = null;
+      }
+      events.push({
+        direction: 'system',
+        method: 'log',
+        id: null,
+        message: trimmedLine,
+        json: ''
+      });
+    }
+  }
+
+  if (currentEvent) {
+    events.push(currentEvent);
+  }
+
+  return events;
+}
+
+function renderStructuredLog() {
+  const listEl = document.getElementById('logEventsList');
+  const filter = document.getElementById('logFilterInput').value.toLowerCase();
+
+  let filteredEvents = currentLogEvents;
+  if (filter) {
+    filteredEvents = currentLogEvents.filter(event => {
+      if (event.method?.toLowerCase().includes(filter)) return true;
+      if (event.message?.toLowerCase().includes(filter)) return true;
+      if (event.json?.toLowerCase().includes(filter)) return true;
+      return false;
+    });
+  }
+
+  if (filteredEvents.length === 0) {
+    listEl.innerHTML = '<div class="log-empty">No events to display</div>';
+    return;
+  }
+
+  listEl.innerHTML = filteredEvents.map((event, idx) => {
+    const dirClass = event.direction === 'request' ? 'request' : event.direction === 'response' ? 'response' : 'error';
+    const dirLabel = event.direction.toUpperCase();
+    const methodColor = getMethodColor(event.method);
+
+    let bodyHtml = '';
+    if (event.json && event.direction !== 'system') {
+      bodyHtml = `<div class="log-event-body"><pre>${syntaxHighlightJson(event.json)}</pre></div>`;
+    } else if (event.message) {
+      bodyHtml = `<div class="log-event-body"><pre>${escapeHtml(event.message)}</pre></div>`;
+    }
+
+    return `
+      <div class="log-event" data-idx="${idx}">
+        <div class="log-event-header">
+          <span class="log-event-direction ${dirClass}">${dirLabel}</span>
+          <span class="log-event-method" style="color: ${methodColor}">${escapeHtml(event.method)}</span>
+          ${event.id !== null && event.id !== undefined ? `<span class="log-event-id">#${event.id}</span>` : ''}
+        </div>
+        ${bodyHtml}
+      </div>
+    `;
+  }).join('');
+}
+
+function getMethodColor(method) {
+  const colors = {
+    'initialize': '#10b981',
+    'initialize/result': '#10b981',
+    'tools/list': '#8b5cf6',
+    'tools/list/result': '#8b5cf6',
+    'tools/call': '#f59e0b',
+    'tools/call/result': '#f59e0b',
+    'resources/list': '#3b82f6',
+    'resources/list/result': '#3b82f6',
+    'resources/read': '#3b82f6',
+    'resources/read/result': '#3b82f6',
+    'prompts/list': '#ec4899',
+    'prompts/list/result': '#ec4899',
+    'notifications/initialized': '#6366f1',
+    'sampling/create_message': '#14b8a6',
+    'sampling/create_message/result': '#14b8a6',
+    'cancel': '#ef4444',
+    'ping': '#84cc16'
+  };
+  return colors[method] || 'var(--text-primary)';
+}
+
+function syntaxHighlightJson(json) {
+  if (!json) return '';
+  try {
+    const parsed = JSON.parse(json);
+    return syntaxHighlightObject(parsed);
+  } catch {
+    return escapeHtml(json).replace(/(".*?")/g, '<span class="string">$1</span>');
+  }
+}
+
+function syntaxHighlightObject(obj) {
+  if (typeof obj === 'string') {
+    return `<span class="string">"${escapeHtml(obj)}"</span>`;
+  } else if (typeof obj === 'number') {
+    return `<span class="number">${obj}</span>`;
+  } else if (typeof obj === 'boolean') {
+    return `<span class="boolean">${obj}</span>`;
+  } else if (obj === null) {
+    return `<span class="null">null</span>`;
+  } else if (Array.isArray(obj)) {
+    const items = obj.map(item => syntaxHighlightObject(item)).join(', ');
+    return `[${items}]`;
+  } else if (typeof obj === 'object') {
+    const entries = Object.entries(obj).map(([key, val]) => {
+      return `<span class="key">"${escapeHtml(key)}"</span>: ${syntaxHighlightObject(val)}`;
+    }).join(', ');
+    return `{${entries}}`;
+  }
+  return String(obj);
+}
+
+function displayLog(logText) {
+  const logContent = document.getElementById('logContent');
+  const filter = document.getElementById('logFilterInput').value.toLowerCase();
+
+  if (filter) {
+    const lines = logText.split('\n');
+    const filtered = lines.filter(line => line.toLowerCase().includes(filter));
+    logContent.textContent = filtered.join('\n');
+  } else {
+    logContent.textContent = logText;
+  }
 }
 
 function filterLog() {
-  if (currentLogServer) {
-    loadLog(currentLogServer);
+  displayLog(currentLogRaw);
+  if (logViewMode === 'structured') {
+    renderStructuredLog();
   }
 }
 
@@ -1287,6 +1560,8 @@ document.getElementById('clearLogFilterBtn').addEventListener('click', () => {
   filterLog();
 });
 document.getElementById('logFilterInput').addEventListener('input', filterLog);
+document.getElementById('logViewRawBtn').addEventListener('click', () => setLogView('raw'));
+document.getElementById('logViewStructuredBtn').addEventListener('click', () => setLogView('structured'));
 
 document.getElementById('catalogSearchInput').addEventListener('input', (e) => {
   const query = e.target.value.toLowerCase();

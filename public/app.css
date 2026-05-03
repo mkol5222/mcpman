@@ -604,6 +604,156 @@ body {
   overflow: auto;
 }
 
+.log-modal-content {
+  display: flex;
+  flex-direction: column;
+  height: calc(80vh - 140px);
+}
+
+.log-raw-panel {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg-primary);
+}
+
+.log-structured-panel {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg-primary);
+  padding: 0;
+}
+
+.log-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+
+.log-event {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.log-event-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.log-event-direction {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.log-event-direction.request {
+  background: rgba(124, 92, 252, 0.2);
+  color: var(--accent);
+}
+
+.log-event-direction.response {
+  background: rgba(52, 211, 153, 0.2);
+  color: var(--success);
+}
+
+.log-event-direction.error {
+  background: rgba(248, 113, 113, 0.2);
+  color: var(--error);
+}
+
+.log-event-method {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.log-event-id {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.log-event-body {
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  overflow-x: auto;
+}
+
+.log-event-body pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.log-event-json {
+  color: var(--text-secondary);
+}
+
+.log-event-json .key {
+  color: var(--accent);
+}
+
+.log-event-json .string {
+  color: var(--success);
+}
+
+.log-event-json .number {
+  color: var(--warning);
+}
+
+.log-event-json .boolean {
+  color: #f59e0b;
+}
+
+.log-event-json .null {
+  color: var(--text-muted);
+}
+
+.log-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 40px;
+  font-size: 0.9rem;
+}
+
+.log-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 24px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+
+.log-view-toggle {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.log-view-toggle .btn-xs {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.log-view-toggle .btn-xs.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
 .log-content {
   font-family: 'SF Mono', 'Fira Code', monospace;
   font-size: 0.75rem;

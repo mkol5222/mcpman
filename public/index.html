@@ -238,9 +238,18 @@
         <div class="log-toolbar">
           <input type="text" id="logFilterInput" placeholder="Filter logs..." class="log-filter-input">
           <button id="clearLogFilterBtn" class="btn btn-xs">Clear</button>
+          <div class="log-view-toggle">
+            <button id="logViewRawBtn" class="btn btn-xs btn-active">Raw</button>
+            <button id="logViewStructuredBtn" class="btn btn-xs">Structured</button>
+          </div>
         </div>
-        <div class="modal-body log-body" id="logModalBody">
-          <pre id="logContent" class="log-content"></pre>
+        <div class="log-modal-content">
+          <div class="log-raw-panel" id="logRawPanel">
+            <pre id="logContent" class="log-content"></pre>
+          </div>
+          <div class="log-structured-panel hidden" id="logStructuredPanel">
+            <div class="log-events-list" id="logEventsList"></div>
+          </div>
         </div>
       </div>
     </div>
