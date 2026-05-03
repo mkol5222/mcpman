@@ -34,6 +34,7 @@ let validationWarningEl = null;
 let currentOS = 'unknown';
 let currentConfig = null;
 let currentServers = [];
+let currentSearchQuery = '';
 let currentGlobalEnv = {};
 let configEditorOpen = false;
 let configEditMode = false;
@@ -559,11 +560,8 @@ function hideConfigInfo() {
 }
 
 function renderServers(servers, searchQuery = '') {
-  const searchHtml = `
-    <div class="servers-search">
-      <input type="text" id="serversSearchInput" placeholder="Search servers..." class="servers-search-input" value="${escapeHtml(searchQuery)}">
-    </div>
-  `;
+  currentServers = servers;
+  currentSearchQuery = searchQuery || '';
 
   let filteredServers = servers;
   if (searchQuery) {
@@ -576,23 +574,13 @@ function renderServers(servers, searchQuery = '') {
     });
   }
 
-  const cardsHtml = filteredServers.map((server, idx) => {
+  const serversCardsEl = document.getElementById('serversCards');
+  serversCardsEl.innerHTML = '';
+
+  filteredServers.forEach((server, idx) => {
     const card = document.createElement('div');
     card.className = 'server-card';
     card.innerHTML = createServerCardHTML(server);
-    return card.outerHTML;
-  }).join('');
-
-  serversListEl.innerHTML = searchHtml + cardsHtml;
-
-  const searchInput = document.getElementById('serversSearchInput');
-  searchInput.addEventListener('input', (e) => {
-    renderServers(servers, e.target.value);
-  });
-
-  filteredServers.forEach((server, idx) => {
-    const card = serversListEl.children[idx + 1];
-    if (!card) return;
 
     card.addEventListener('click', (e) => {
       if (!e.target.closest('.card-actions')) {
@@ -630,6 +618,8 @@ function renderServers(servers, searchQuery = '') {
         showLogModal(serverName);
       });
     }
+
+    serversCardsEl.appendChild(card);
   });
 
   if (filteredServers.length === 0 && searchQuery) {
@@ -643,10 +633,45 @@ function renderServers(servers, searchQuery = '') {
       <h2>No Matching Servers</h2>
       <p>No servers match your search "${escapeHtml(searchQuery)}"</p>
     `;
-    serversListEl.appendChild(noResults);
+    serversCardsEl.appendChild(noResults);
   }
 
   serversListEl.classList.remove('hidden');
+}
+
+function setupSearchListener() {
+  const searchInput = document.getElementById('serversSearchInput');
+  if (!searchInput) {
+    console.error('serversSearchInput not found');
+    return;
+  }
+  const clearBtn = document.getElementById('serversSearchClear');
+
+  function clearSearch() {
+    searchInput.value = '';
+    currentSearchQuery = '';
+    clearBtn.classList.add('hidden');
+    renderServers(currentServers, '');
+    searchInput.focus();
+  }
+
+  searchInput.value = currentSearchQuery;
+  clearBtn.classList.toggle('hidden', !currentSearchQuery);
+
+  searchInput.addEventListener('input', (e) => {
+    currentSearchQuery = e.target.value;
+    clearBtn.classList.toggle('hidden', !currentSearchQuery);
+    renderServers(currentServers, currentSearchQuery);
+  });
+
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && currentSearchQuery) {
+      e.preventDefault();
+      clearSearch();
+    }
+  });
+
+  clearBtn.addEventListener('click', clearSearch);
 }
 
 function createServerCardHTML(server) {
@@ -696,7 +721,6 @@ function createServerCardHTML(server) {
 }
 
 function hideServers() {
-  serversListEl.innerHTML = '';
   serversListEl.classList.add('hidden');
 }
 
@@ -1635,3 +1659,4 @@ document.getElementById('addEnvBtn').addEventListener('click', () => {
 });
 
 loadConfig();
+setupSearchListener();

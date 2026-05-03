@@ -351,14 +351,19 @@ body {
   margin-bottom: 8px;
 }
 
+.servers-search-wrapper {
+  position: relative;
+}
+
 .servers-search-input {
   width: 100%;
-  padding: 10px 14px;
+  padding: 10px 36px 10px 14px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: 0.9rem;
+  box-sizing: border-box;
 }
 
 .servers-search-input:focus {
@@ -368,6 +373,26 @@ body {
 
 .servers-search-input::placeholder {
   color: var(--text-muted);
+}
+
+.servers-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.servers-search-clear:hover {
+  color: var(--text-primary);
+  background: var(--border);
 }
 
 .server-card {

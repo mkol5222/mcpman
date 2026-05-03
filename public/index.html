@@ -155,8 +155,12 @@
 
       <div id="serversList" class="servers-list">
         <div class="servers-search">
-          <input type="text" id="serversSearchInput" placeholder="Search servers..." class="servers-search-input">
+          <div class="servers-search-wrapper">
+            <input type="text" id="serversSearchInput" placeholder="Search servers..." class="servers-search-input">
+            <button id="serversSearchClear" class="servers-search-clear hidden" title="Clear search">&times;</button>
+          </div>
         </div>
+        <div id="serversCards"></div>
       </div>
 
       <div id="noServers" class="no-servers hidden">
