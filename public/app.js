@@ -1146,242 +1146,309 @@ async function loadLog(serverName) {
   }
 }
 
+// ── JSON extraction: walks brackets to find the outermost object ─────────────
+function extractJson(str) {
+  if (!str || str[0] !== '{') return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\' && inStr) { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) return str.slice(0, i + 1);
+  }
+  return null;
+}
+
+// ── Log parser: emits typed event objects ────────────────────────────────────
+const LOG_PREFIX_RE = /^(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+/;
+
 function parseLogToEvents(logText) {
   const events = [];
-  const lines = logText.split('\n');
+  for (const line of logText.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
 
-  let currentEvent = null;
-  let buffer = [];
+    // Standard Claude SDK log format: TIMESTAMP [server] [level] Message from client/server: {...}
+    const prefixMatch = trimmed.match(LOG_PREFIX_RE);
+    if (prefixMatch) {
+      const [, timestamp, serverName, level] = prefixMatch;
+      const rest = trimmed.slice(prefixMatch[0].length);
+      let direction = null, jsonOffset = -1;
+      if (rest.startsWith('Message from client:')) { direction = 'client'; jsonOffset = rest.indexOf('{', 20); }
+      else if (rest.startsWith('Message from server:')) { direction = 'server'; jsonOffset = rest.indexOf('{', 20); }
 
-  function fixTruncatedJson(jsonStr) {
-    const truncatedMatch = jsonStr.match(/\[(\d+)\s+chars\s+truncated\]$/);
-    if (!truncatedMatch) return jsonStr;
-
-    const reconstructed = jsonStr.slice(0, jsonStr.lastIndexOf('['));
-    try {
-      JSON.parse(reconstructed);
-      return reconstructed;
-    } catch {
-      return jsonStr;
-    }
-  }
-
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-
-    if (trimmedLine.startsWith('-->')) {
-      if (currentEvent) {
-        events.push(currentEvent);
-      }
-      let jsonStr = trimmedLine.slice(3).trim();
-      jsonStr = fixTruncatedJson(jsonStr);
-      try {
-        const json = JSON.parse(jsonStr);
-        currentEvent = {
-          direction: 'request',
-          method: json.method || 'unknown',
-          id: json.id,
-          params: json.params,
-          json: jsonStr
-        };
-      } catch {
-        currentEvent = {
-          direction: 'request',
-          method: 'parse_error',
-          id: null,
-          params: null,
-          json: jsonStr
-        };
-      }
-      buffer = [];
-    } else if (trimmedLine.startsWith('<--')) {
-      if (currentEvent) {
-        events.push(currentEvent);
-      }
-      let jsonStr = trimmedLine.slice(3).trim();
-      jsonStr = fixTruncatedJson(jsonStr);
-      try {
-        const json = JSON.parse(jsonStr);
-        currentEvent = {
-          direction: json.error ? 'error' : 'response',
-          method: currentEvent?.method || 'unknown',
-          id: json.id,
-          result: json.result,
-          error: json.error,
-          json: jsonStr
-        };
-      } catch {
-        currentEvent = {
-          direction: 'error',
-          method: 'parse_error',
-          id: null,
-          result: null,
-          error: jsonStr,
-          json: jsonStr
-        };
-      }
-      buffer = [];
-    } else if (trimmedLine.startsWith('[CLD]') || trimmedLine.startsWith('[MCP]') || trimmedLine.startsWith('[NPM]')) {
-      if (currentEvent) {
-        events.push(currentEvent);
-        currentEvent = null;
-      }
-      events.push({
-        direction: 'system',
-        method: 'log',
-        id: null,
-        message: trimmedLine,
-        json: ''
-      });
-    } else if (trimmedLine.includes('{') && trimmedLine.includes('"jsonrpc"')) {
-      let cleanedLine = fixTruncatedJson(trimmedLine);
-      try {
-        const json = JSON.parse(cleanedLine);
-        if (json.method) {
-          if (currentEvent) events.push(currentEvent);
-          currentEvent = {
-            direction: 'request',
-            method: json.method || 'unknown',
-            id: json.id,
-            params: json.params,
-            json: cleanedLine
-          };
-        } else if (json.result !== undefined || json.error) {
-          if (currentEvent) events.push(currentEvent);
-          currentEvent = {
-            direction: json.error ? 'error' : 'response',
-            method: currentEvent?.method || 'unknown',
-            id: json.id,
-            result: json.result,
-            error: json.error,
-            json: cleanedLine
-          };
-        } else {
-          buffer.push(cleanedLine);
+      if (direction !== null && jsonOffset !== -1) {
+        const jsonStr = extractJson(rest.slice(jsonOffset));
+        if (jsonStr) {
+          try {
+            const json = JSON.parse(jsonStr);
+            events.push({ type: 'mcp', timestamp, serverName, level, direction,
+              id: json.id, method: json.method || null, params: json.params || null,
+              result: json.result !== undefined ? json.result : null,
+              error: json.error || null, json, rawJson: jsonStr });
+            continue;
+          } catch {}
         }
-      } catch {
-        buffer.push(cleanedLine);
       }
-    } else if (trimmedLine.includes('[...') && trimmedLine.includes('truncated]')) {
-      buffer.push(trimmedLine);
-    } else if (trimmedLine) {
-      if (currentEvent) {
-        events.push(currentEvent);
-        currentEvent = null;
-      }
-      events.push({
-        direction: 'system',
-        method: 'log',
-        id: null,
-        message: trimmedLine,
-        json: ''
-      });
+      events.push({ type: 'system', timestamp, message: trimmed });
+      continue;
     }
-  }
 
-  if (currentEvent) {
-    events.push(currentEvent);
-  }
+    // Legacy --> / <-- stdio format
+    if (trimmed.startsWith('-->') || trimmed.startsWith('<--')) {
+      const isClient = trimmed.startsWith('-->');
+      const jsonStr = extractJson(trimmed.slice(3).trim());
+      if (jsonStr) {
+        try {
+          const json = JSON.parse(jsonStr);
+          events.push({ type: 'mcp', timestamp: null, direction: isClient ? 'client' : 'server',
+            id: json.id, method: json.method || null, params: json.params || null,
+            result: json.result !== undefined ? json.result : null,
+            error: json.error || null, json, rawJson: jsonStr });
+          continue;
+        } catch {}
+      }
+      events.push({ type: 'system', message: trimmed });
+      continue;
+    }
 
+    // Inline jsonrpc fallback (other log formats)
+    if (trimmed.includes('"jsonrpc"')) {
+      const brace = trimmed.indexOf('{');
+      if (brace !== -1) {
+        const jsonStr = extractJson(trimmed.slice(brace));
+        if (jsonStr) {
+          try {
+            const json = JSON.parse(jsonStr);
+            events.push({ type: 'mcp', timestamp: null,
+              direction: json.method ? 'client' : 'server',
+              id: json.id, method: json.method || null, params: json.params || null,
+              result: json.result !== undefined ? json.result : null,
+              error: json.error || null, json, rawJson: jsonStr });
+            continue;
+          } catch {}
+        }
+      }
+    }
+
+    events.push({ type: 'system', message: trimmed });
+  }
   return events;
 }
 
+// ── Pair requests with responses by id ───────────────────────────────────────
+function groupEventsIntoCalls(events) {
+  const groups = [];
+  const pending = new Map();
+  for (const event of events) {
+    if (event.type !== 'mcp') { groups.push({ type: 'system', event }); continue; }
+    if (event.direction === 'client') {
+      const group = { type: 'call', request: event, response: null };
+      if (event.id != null) pending.set(event.id, group);
+      groups.push(group);
+    } else {
+      if (event.id != null && pending.has(event.id)) {
+        pending.get(event.id).response = event;
+        pending.delete(event.id);
+      } else {
+        groups.push({ type: 'call', request: null, response: event });
+      }
+    }
+  }
+  return groups;
+}
+
+// ── Rendering helpers ─────────────────────────────────────────────────────────
+function methodClass(method) {
+  if (!method) return 'other';
+  const m = method.toLowerCase();
+  if (m.startsWith('tools/call')) return 'tools-call';
+  if (m.startsWith('tools/list')) return 'tools-list';
+  if (m.startsWith('initialize')) return 'initialize';
+  if (m.startsWith('notifications/')) return 'notifications';
+  if (m.startsWith('resources/')) return 'resources';
+  if (m.startsWith('prompts/')) return 'prompts';
+  if (m === 'ping') return 'ping';
+  return 'other';
+}
+
+function formatMcpTime(timestamp) {
+  if (!timestamp) return '';
+  try {
+    return new Date(timestamp).toLocaleTimeString('en-US',
+      { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch { return ''; }
+}
+
+function getDuration(req, resp) {
+  if (!req?.timestamp || !resp?.timestamp) return null;
+  const ms = new Date(resp.timestamp) - new Date(req.timestamp);
+  if (isNaN(ms) || ms < 0) return null;
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(2)}s`;
+}
+
+function getMcpPreview(event) {
+  if (event.direction === 'client') {
+    const method = event.method || '';
+    if (method === 'tools/call' && event.params?.name) {
+      const args = event.params.arguments || {};
+      const parts = Object.entries(args).slice(0, 4).map(([k, v]) => {
+        const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
+        return `${k}: ${val.length > 30 ? val.slice(0, 30) + '…' : val}`;
+      });
+      return event.params.name + (parts.length ? ' · ' + parts.join(' · ') : '');
+    }
+    if (method === 'initialize' && event.params?.clientInfo) {
+      const ci = event.params.clientInfo;
+      return `${ci.name || ''} ${ci.version || ''}`.trim();
+    }
+    if (method === 'tools/list') return 'listing available tools';
+    if (event.params) {
+      const s = JSON.stringify(event.params);
+      return s.length > 100 ? s.slice(0, 100) + '…' : s;
+    }
+    return '';
+  }
+  if (event.error) {
+    const msg = event.error.message || JSON.stringify(event.error);
+    return `Error: ${msg.length > 100 ? msg.slice(0, 100) + '…' : msg}`;
+  }
+  if (event.result != null) {
+    const r = event.result;
+    if (Array.isArray(r.content) && r.content.length > 0) {
+      const textItem = r.content.find(c => c.type === 'text');
+      if (textItem?.text) {
+        const text = textItem.text.replace(/\s+/g, ' ').trim();
+        return text.length > 130 ? text.slice(0, 130) + '…' : text;
+      }
+    }
+    if (Array.isArray(r.tools)) return `${r.tools.length} tool${r.tools.length !== 1 ? 's' : ''} available`;
+    const s = JSON.stringify(r);
+    return s.length > 100 ? s.slice(0, 100) + '…' : s;
+  }
+  return '';
+}
+
+function renderMcpMessage(event, direction) {
+  const preview = getMcpPreview(event);
+  const arrow = direction === 'client' ? '→' : '←';
+  const errorCls = (event.error || event.result?.isError) ? ' is-error' : '';
+  const jsonHtml = syntaxHighlightJson(event.rawJson);
+  return `
+    <div class="mcp-message from-${direction}${errorCls}">
+      <div class="mcp-msg-arrow">${arrow}</div>
+      <div class="mcp-msg-body">
+        ${preview ? `<div class="mcp-preview">${escapeHtml(preview)}</div>` : ''}
+        <details class="mcp-json-expand">
+          <summary class="mcp-json-summary">JSON</summary>
+          <pre class="mcp-json-pre">${jsonHtml}</pre>
+        </details>
+      </div>
+    </div>`;
+}
+
+function renderCallGroup(group) {
+  const { request: req, response: resp } = group;
+  const method = req?.method || '(notification)';
+  const callId = req?.id ?? resp?.id;
+  const duration = getDuration(req, resp);
+  const time = formatMcpTime(req?.timestamp || resp?.timestamp);
+  const mCls = methodClass(method);
+  return `
+    <div class="mcp-call">
+      <div class="mcp-call-header">
+        <span class="mcp-method-tag mcp-method-${mCls}">${escapeHtml(method)}</span>
+        ${callId != null ? `<span class="mcp-call-id">#${callId}</span>` : ''}
+        ${duration ? `<span class="mcp-call-duration">${duration}</span>` : ''}
+        ${!resp && req ? '<span class="mcp-call-pending">pending…</span>' : ''}
+        ${time ? `<span class="mcp-call-time">${time}</span>` : ''}
+      </div>
+      ${req ? renderMcpMessage(req, 'client') : ''}
+      ${resp ? renderMcpMessage(resp, 'server') : ''}
+    </div>`;
+}
+
+// ── Structured log renderer ───────────────────────────────────────────────────
 function renderStructuredLog() {
   const listEl = document.getElementById('logEventsList');
   const filter = document.getElementById('logFilterInput').value.toLowerCase();
 
-  let filteredEvents = currentLogEvents;
-  if (filter) {
-    filteredEvents = currentLogEvents.filter(event => {
-      if (event.method?.toLowerCase().includes(filter)) return true;
-      if (event.message?.toLowerCase().includes(filter)) return true;
-      if (event.json?.toLowerCase().includes(filter)) return true;
-      return false;
-    });
-  }
+  const groups = groupEventsIntoCalls(currentLogEvents);
+  const filtered = filter ? groups.filter(g => {
+    if (g.type === 'system') return g.event.message?.toLowerCase().includes(filter);
+    return g.request?.method?.toLowerCase().includes(filter)
+      || g.request?.rawJson?.toLowerCase().includes(filter)
+      || g.response?.rawJson?.toLowerCase().includes(filter);
+  }) : groups;
 
-  if (filteredEvents.length === 0) {
-    listEl.innerHTML = '<div class="log-empty">No events to display</div>';
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div class="log-empty">${filter ? 'No events match the filter' : 'No MCP events found in this log'}</div>`;
     return;
   }
 
-  listEl.innerHTML = filteredEvents.map((event, idx) => {
-    const dirClass = event.direction === 'request' ? 'request' : event.direction === 'response' ? 'response' : 'error';
-    const dirLabel = event.direction.toUpperCase();
-    const methodColor = getMethodColor(event.method);
+  const calls = filtered.filter(g => g.type === 'call');
+  const methodCounts = {};
+  let errors = 0;
+  for (const g of calls) {
+    const m = g.request?.method || '(notification)';
+    methodCounts[m] = (methodCounts[m] || 0) + 1;
+    if (g.response?.error || g.response?.result?.isError) errors++;
+  }
 
-    let bodyHtml = '';
-    if (event.json && event.direction !== 'system') {
-      bodyHtml = `<div class="log-event-body"><pre>${syntaxHighlightJson(event.json)}</pre></div>`;
-    } else if (event.message) {
-      bodyHtml = `<div class="log-event-body"><pre>${escapeHtml(event.message)}</pre></div>`;
+  const methodTagsHtml = Object.entries(methodCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([m, c]) => `<span class="mcp-stat-tag mcp-method-${methodClass(m)}">${escapeHtml(m)}: ${c}</span>`)
+    .join('');
+
+  const statsHtml = `
+    <div class="mcp-stats-bar">
+      <span class="mcp-stat-total">${calls.length} call${calls.length !== 1 ? 's' : ''}</span>
+      ${errors > 0 ? `<span class="mcp-stat-errors">${errors} error${errors !== 1 ? 's' : ''}</span>` : ''}
+      <div class="mcp-stat-methods">${methodTagsHtml}</div>
+    </div>`;
+
+  listEl.innerHTML = statsHtml + filtered.map(g => {
+    if (g.type === 'system') {
+      const time = g.event.timestamp ? formatMcpTime(g.event.timestamp) : '';
+      return `<div class="mcp-system-line">${time ? `<span class="mcp-system-time">${time}</span>` : ''}<span class="mcp-system-text">${escapeHtml(g.event.message || '')}</span></div>`;
     }
-
-    return `
-      <div class="log-event" data-idx="${idx}">
-        <div class="log-event-header">
-          <span class="log-event-direction ${dirClass}">${dirLabel}</span>
-          <span class="log-event-method" style="color: ${methodColor}">${escapeHtml(event.method)}</span>
-          ${event.id !== null && event.id !== undefined ? `<span class="log-event-id">#${event.id}</span>` : ''}
-        </div>
-        ${bodyHtml}
-      </div>
-    `;
+    return renderCallGroup(g);
   }).join('');
 }
 
-function getMethodColor(method) {
-  const colors = {
-    'initialize': '#10b981',
-    'initialize/result': '#10b981',
-    'tools/list': '#8b5cf6',
-    'tools/list/result': '#8b5cf6',
-    'tools/call': '#f59e0b',
-    'tools/call/result': '#f59e0b',
-    'resources/list': '#3b82f6',
-    'resources/list/result': '#3b82f6',
-    'resources/read': '#3b82f6',
-    'resources/read/result': '#3b82f6',
-    'prompts/list': '#ec4899',
-    'prompts/list/result': '#ec4899',
-    'notifications/initialized': '#6366f1',
-    'sampling/create_message': '#14b8a6',
-    'sampling/create_message/result': '#14b8a6',
-    'cancel': '#ef4444',
-    'ping': '#84cc16'
-  };
-  return colors[method] || 'var(--text-primary)';
+// ── Syntax highlighting ───────────────────────────────────────────────────────
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function syntaxHighlightJson(json) {
   if (!json) return '';
-  try {
-    const parsed = JSON.parse(json);
-    return syntaxHighlightObject(parsed);
-  } catch {
-    return escapeHtml(json).replace(/(".*?")/g, '<span class="string">$1</span>');
+  let str;
+  try { str = JSON.stringify(JSON.parse(json), null, 2); } catch { str = json; }
+  // Match key strings (followed by :), value strings, booleans/null, numbers
+  const TOKEN = /("(?:[^"\\]|\\.)*")(\s*:)|("(?:[^"\\]|\\.)*")|(true|false|null)|(-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g;
+  let out = '', last = 0, m;
+  while ((m = TOKEN.exec(str)) !== null) {
+    out += escHtml(str.slice(last, m.index));
+    if (m[1])      out += `<span class="sh-key">${escHtml(m[1])}</span>${escHtml(m[2])}`;
+    else if (m[3]) out += `<span class="sh-string">${escHtml(m[3])}</span>`;
+    else if (m[4]) out += `<span class="${m[4] === 'null' ? 'sh-null' : 'sh-boolean'}">${m[4]}</span>`;
+    else if (m[5]) out += `<span class="sh-number">${m[5]}</span>`;
+    last = TOKEN.lastIndex;
   }
+  return out + escHtml(str.slice(last));
 }
 
-function syntaxHighlightObject(obj) {
-  if (typeof obj === 'string') {
-    return `<span class="string">"${escapeHtml(obj)}"</span>`;
-  } else if (typeof obj === 'number') {
-    return `<span class="number">${obj}</span>`;
-  } else if (typeof obj === 'boolean') {
-    return `<span class="boolean">${obj}</span>`;
-  } else if (obj === null) {
-    return `<span class="null">null</span>`;
-  } else if (Array.isArray(obj)) {
-    const items = obj.map(item => syntaxHighlightObject(item)).join(', ');
-    return `[${items}]`;
-  } else if (typeof obj === 'object') {
-    const entries = Object.entries(obj).map(([key, val]) => {
-      return `<span class="key">"${escapeHtml(key)}"</span>: ${syntaxHighlightObject(val)}`;
-    }).join(', ');
-    return `{${entries}}`;
-  }
-  return String(obj);
+function getMethodColor(method) {
+  const colors = {
+    'initialize': '#10b981', 'tools/list': '#8b5cf6', 'tools/call': '#f59e0b',
+    'resources/list': '#3b82f6', 'resources/read': '#3b82f6',
+    'prompts/list': '#ec4899', 'ping': '#84cc16'
+  };
+  return colors[method] || 'var(--text-primary)';
 }
 
 function displayLog(logText) {

@@ -1329,3 +1329,225 @@ body {
 .global-env-add .env-input:nth-child(2) {
   flex: 2;
 }
+
+/* ── MCP Structured Log ──────────────────────────────────────────────────── */
+
+/* JSON syntax highlighting tokens */
+.sh-key     { color: var(--accent); }
+.sh-string  { color: var(--success); }
+.sh-number  { color: var(--warning); }
+.sh-boolean { color: #f59e0b; }
+.sh-null    { color: var(--text-muted); }
+
+/* Override list padding so stats bar sits flush at top */
+.log-structured-panel > .log-events-list {
+  padding: 0 0 16px;
+  gap: 0;
+}
+
+.mcp-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.mcp-stat-total {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mcp-stat-errors {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.mcp-stat-methods {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.mcp-stat-tag {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+/* Method colour tokens – used on both stat tags and call-header badges */
+.mcp-method-tools-call    { background: rgba(245,158,11,0.15);  color: #f59e0b; }
+.mcp-method-tools-list    { background: rgba(139,92,246,0.15);  color: #8b5cf6; }
+.mcp-method-initialize    { background: rgba(16,185,129,0.15);  color: #10b981; }
+.mcp-method-notifications { background: rgba(59,130,246,0.15);  color: #3b82f6; }
+.mcp-method-resources     { background: rgba(6,182,212,0.15);   color: #06b6d4; }
+.mcp-method-prompts       { background: rgba(236,72,153,0.15);  color: #ec4899; }
+.mcp-method-ping          { background: rgba(132,204,22,0.15);  color: #84cc16; }
+.mcp-method-other         { background: rgba(148,163,184,0.12); color: #94a3b8; }
+
+/* Call card */
+.mcp-call {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin: 8px 16px 0;
+}
+
+.mcp-call-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+
+.mcp-method-tag {
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.mcp-call-id {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.mcp-call-duration {
+  background: rgba(52,211,153,0.12);
+  color: var(--success);
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.mcp-call-pending {
+  background: rgba(251,191,36,0.12);
+  color: var(--warning);
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+}
+
+.mcp-call-time {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* Individual request / response row inside a call card */
+.mcp-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.mcp-msg-arrow {
+  font-size: 0.95rem;
+  font-weight: 700;
+  min-width: 16px;
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+
+.mcp-message.from-client .mcp-msg-arrow { color: var(--accent); }
+.mcp-message.from-server .mcp-msg-arrow { color: var(--success); }
+.mcp-message.from-server.is-error .mcp-msg-arrow { color: var(--error); }
+
+.mcp-msg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mcp-preview {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcp-message.from-client .mcp-preview { color: var(--text-primary); }
+.mcp-message.from-server.is-error .mcp-preview { color: var(--error); }
+
+/* Expandable JSON block */
+.mcp-json-expand { margin-top: 2px; }
+
+.mcp-json-summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  user-select: none;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.mcp-json-summary::-webkit-details-marker { display: none; }
+
+.mcp-json-summary::before {
+  content: '▶';
+  font-size: 0.55rem;
+  display: inline-block;
+  transition: transform 0.15s;
+}
+
+details[open] > .mcp-json-summary::before { transform: rotate(90deg); }
+
+.mcp-json-summary:hover { color: var(--text-primary); }
+
+.mcp-json-pre {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  white-space: pre;
+  overflow: auto;
+  max-height: 320px;
+}
+
+/* System log lines (non-MCP) */
+.mcp-system-line {
+  display: flex;
+  gap: 12px;
+  padding: 2px 16px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.mcp-system-time {
+  opacity: 0.5;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mcp-system-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
